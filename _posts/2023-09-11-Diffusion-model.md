@@ -370,3 +370,8 @@ where $$\theta=\mathrm{arccos}\left(\frac{(\boldsymbol{x}_T)^T\boldsymbol{x}'_T}
   <img src="../../../assets/img/diffusion-model/DDIM-interpolation.png" style="width:100%">
   <figcaption>Fig.3 - The result from <d-cite key="song2020denoising"></d-cite> and the deterministic generation strategy lead to consistency property</figcaption>
 </figure>
+
+
+# Interesting Reading
+* [Lilian Weng's post on diffusion model](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/)
+* [Spaces.Ac.cn's post on DDIM](https://spaces.ac.cn/archives/9181)

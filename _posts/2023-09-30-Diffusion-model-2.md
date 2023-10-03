@@ -1,0 +1,103 @@
+---
+layout: distill
+title: Notes on diffusion model (II) -- Conditional Generation
+date: 2023-09-30
+description: Latent diffusion,
+tag: ML
+bibliography: reference.bib
+
+toc: true
+toc_depth: 2
+---
+
+# Introduction
+In previous discussion, we have shown power of pixel-based idiffusion models on a variety of dataset and tasks such as image synthesis and sampling.
+These models achieved state-of-the-art synthesis quality.
+In this post, we are going to discuss about conditional generation which means guide the generation process with additional conditions.
+For instances, it is often the case that we need to generate images of which its type falls into a sub-group of training data.
+Or, we want to genearate images that satisfies certain condition described in natural language.
+Conditional generation provided a solution for these tasks.
+
+
+# Latent Diffusion Models
+Operating on pixel space is exceptional costful.
+For algorithms like diffusion models, it is even more demanding, since the recursive updates amplified this cost.
+A common solution in ML to deal with high dimensionality is embedding data into lower dimensional latent space.
+It is observed in <d-cite key="rombach2022high"></d-cite> that most bits of an image contribute to perceptual details and the semantic and conceptual composition remains intact  after undergoing aggressive compression.
+This motivates <d-cite key="rombach2022high"></d-cite>  to first embed the image into latent space, with models like VAE, then train a diffusion model in latent space.
+Moreover, it loosely decomposes the perceptual compression (removing high-frequency details) and semantic compression (semantic and conceptual composition of the data).
+In practice, a VAE can be used first to trimming off pixel-level redundancy and an U-Net backboned diffusion process can be used to learn to manipulate semantic concepts.
+<figure>
+  <img src="../../../assets/img/diffusion-model/sematic-perceptual-comp.png" style="width:100%">
+  <figcaption>Fig.1 - The plot shows the [rate-distortion trade-off](https://en.wikipedia.org/wiki/Rate%E2%80%93distortion_theory). Notice that semantic compression and perceptual compression happens at different stages in the plot. The graph is taken from <d-cite key="rombach2022high"></d-cite>. Bits per dim and RMSE measures different aspect for generative model. Details can be found in <d-cite key="theis2015note"></d-cite>. [Simple explaination.](https://blog.csdn.net/fanyue1997/article/details/109703025)</figcaption>
+</figure>
+
+
+## Methods
+
+The **perception compression process** is depended on an autoencoder model.
+And encoder $$\mathcal{E}$$ encodes an image $$x\in\mathbb{R}^{H\times W\times 3}$$ in RGB space into a latent representation $$z=\mathbb{E}(x)$$, and an decoder $$\mathcal{D}$$ reconstructs the image from its latent $$\tilde{x}=\mathcal{D}(z)=\mathcal{D}(\mathcal{E}(x))$$.
+In contrary to other previous work<d-cite key="esser2021taming">, the paper use a two dimensional latent space to better suit the follow up diffusion model.
+The  paper explored two types of regularization in autoencoder to avoid arbitrarily high-variance in the latent space.
+
+* KL-reg: A small KL penalty towards a standard normal.
+* VQ-reg: Uses a vector quantization layer within the decoder, like VQVAE but the quantization layer absorbed by the decoder.
+
+The **semantic compression** stage happens in the latent space.
+After the autoencoder, the paper construct a diffusion model in latent space with U-Net being the backbone neural network.
+Denote the backbone neural network as $$\epsilon_\theta(\circ, t)$$ and the loss function is
+
+$$
+\begin{equation}\label{eq:LDM-loss}
+L_{L D M}:=\mathbb{E}_{\mathcal{E}(x), \epsilon \sim \mathcal{N}(0,1), t}\left[\left\|\epsilon-\epsilon_\theta\left(z_t, t\right)\right\|_2^2\right].
+\end{equation}
+$$
+
+As in many other generative models and the topic of this blog, **conditional mechanisms** can be applied to this framework and, to be more specific, in the latent space.
+The paper implemented this by adding the additional inputs $$y$$ to the denoising autoencoder as $$\epsilon_\theta\left(z_t, t, y\right)$$.
+The additional inputs $$y$$ can be text, semantics maps or other "embedible information" like images and it aims to controll the synthesis process.
+
+1. Due to the various modalities of the inputs, the paper first project the inputs $$y$$ to an "intermediate representation"(embedding) $$\tau_\theta(y)\in\mathbb{R}^{M\times d_\tau}$$.
+
+2. Cross-attention layer is used to apply controlling signal $$\tau_\theta(y)$$ to the diffusion process through U-Net backbone. To be more specific, $$\mathrm{Attention}(Q, K, V)=\mathrm{softmax}\left(\frac{QK^T}{\sqrt{d}}\right)$$, with 
+
+$$
+Q=W_Q^{(i)} \cdot \varphi_i\left(z_t\right), K=W_K^{(i)} \cdot \tau_\theta(y), V=W_V^{(i)} \cdot \tau_\theta(y).
+$$
+
+Based on image-conditioning pairs, we then learn the conditional LDM via the loss
+
+$$
+L_\mathrm{LDM}:=\mathbb{E}_{\mathcal{E}(x), y, \epsilon \sim \mathcal{N}(0,1), t}\left[\left\|\epsilon-\epsilon_\theta\left(z_t, t, \tau_\theta(y)\right)\right\|_2^2\right].
+$$
+
+<figure>
+  <img src="../../../assets/img/diffusion-model/LDM-flowchart.png" style="width:100%">
+  <figcaption>Fig.2 . Image source: <d-cite key="rombach2022high"></d-cite> </figcaption>
+</figure>
+
+## Experiments
+The paper examine the model performance in two aspects: 
+1. Enerated samples' perceptual quality and training efficiency
+2. Sampling efficiency
+
+**Perceptual Compression Tradeoffs**
+<figure>
+  <img src="../../../assets/img/diffusion-model/LDM-example.png" style="width:100%">
+  <figcaption>Fig.3 Image samples generated from LDM-8(KL) on LAION dataset with 200 DDIM steps. Perceptually, the LDM is capable of generating high fidelity images under the prompt constraint. Image source: <d-cite key="rombach2022high"></d-cite> </figcaption>
+</figure>
+In this experiment, the paper compared FID/Inception scores under different downsample rate at different training steps.
+The experiment observed that LDM, with proper downsample rate, achieved siginificant better FID scores comparing with pixel-based diffusion model.
+<figure>
+  <img src="../../../assets/img/diffusion-model/LDM-training-efficiency.png" style="width:100%">
+  <figcaption>Fig.4 FID and Inception score under different setup. LDM-k where k means downsample coefficient. As training steps increase, the both scores improves under all circumstance. Meanwhile, LDM-8 achieved siginificant better quality than LDM-1(pixel-based diffusion) and achieved faster. Image source: <d-cite key="rombach2022high"></d-cite> </figcaption>
+</figure>
+
+The LDM also demonstrated better sampling efficiency.
+Moreover, it generate samples faster and at a higher quality.
+
+<figure>
+  <img src="../../../assets/img/diffusion-model/LDM-sampling-efficiency.png" style="width:100%">
+  <figcaption>Fig.5 Log FID vs throughput. Left CelebA-HQ and right ImageNet. As we expected, updating reverse diffusion steps in lower dimensional embedding space is less costful and have higher throughput. Moreover, LDM-32 is not only generating samples much faster(visually, at x20) than LDM-1 and LDM-2, it also generate samples with higher quality(in terms of FID). Image source: <d-cite key="rombach2022high"></d-cite> </figcaption>
+</figure>
+
