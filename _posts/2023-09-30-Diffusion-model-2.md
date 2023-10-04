@@ -13,10 +13,64 @@ toc_depth: 2
 # Introduction
 In previous discussion, we have shown power of pixel-based idiffusion models on a variety of dataset and tasks such as image synthesis and sampling.
 These models achieved state-of-the-art synthesis quality.
-In this post, we are going to discuss about conditional generation which means guide the generation process with additional conditions.
-For instances, it is often the case that we need to generate images of which its type falls into a sub-group of training data.
-Or, we want to genearate images that satisfies certain condition described in natural language.
-Conditional generation provided a solution for these tasks.
+In this post, we are going to discuss some recent works on conditional generation which means guide the generation process with additional conditions.
+A naive solution is to train a diffusion model specific on certain dataset and generate samples with it.
+However, more commonly, we want to generate samples conditioned on class labels or a piece of descriptive text.
+
+# Classifier Guided Diffusion
+In order to explicit utilize class label information to guide the diffusion process, <d-cite key="dhariwal2021diffusion"></d-cite> applying the gradient of a trained classifier to guide the diffusion sampling process.
+
+There are three important components in this approach: classifier training, incorporate label information into diffusion model training and classifier-guided sample generation.
+
+1. **Classifier training**: 
+    A classifier $$p(y\mid x)$$ can be exploited to improve a diffusion generator by providing gradient $$\nabla_x p(y\mid x)$$ to the sampling process. 
+    Since the generated images at intermediate steps are noisy, the trained classifier should be able to adapt to these noises.
+    Therefore, the classifier $$p_\phi(y\mid x_t, t)$$ is trained on noisy images $$x_t$$ and then use gradients $$\nabla_{x_t}\log p_\phi(y|x_t, t)$$ to guide the diffusion sampling process towards an arbitrary class label y.
+2. **Adaptive group normalization**:
+    The paper incorporated adaptive group normalization layer $$\mathrm{AdaGN}(h,y)=y_s\mathrm{GroupNorm}(h)+y_b$$ into the neural network, where $$h$$ is the output of previous hidden layer and $$y=[y_s, y_b]$$ is obtained from a linear projection of the timestep and class embedding.
+3. **Conditional reverse noising process**:
+    The paper<d-cite key="dhariwal2021diffusion"></d-cite> proved that the reverse transition distribution can be written in the form as $$p_{\theta, \phi}\left(x_t \mid x_{t+1}, y\right)=Z p_\theta\left(x_t \mid x_{t+1}\right) p_\phi\left(y \mid x_t\right)$$.\\
+    This can be observed from the following relationship:
+    $$
+    \begin{align}
+        q(x_t\mid x_{t+1}, y)=&\frac{q(x_t,x_{t+1}, y)}{q(x_{t+1},y)}\nonumber\\
+        =&q(y\mid x_t, x_{t+1})\frac{q(x_t, x_{t+1})}{q(x_{t+1}, y)}\nonumber\\
+        =&\left(\frac{q(x_{t+1}\mid x_t, y)q(x_t, y)}{q(x_t,x_{t+1})}\right)\frac{q(x_t\mid x_{t+1})}{q(y\mid x_{t+1})}\nonumber\\
+        =&\left(\frac{q(x_{t+1}\mid x_t)q(y\mid x_t)}{q(x_{t+1}\mid x_t)}\right)\frac{q(x_t\mid x_{t+1})}{q(y\mid x_{t+1})}\nonumber\\
+        =&\frac{q(x_t\mid x_{t+1})q(y\mid x_t)}{q(y\mid x_{t+1})},
+    \end{align}
+    $$
+    where $$q(y\mid x_{t+1})$$ can be viewed as a constant since it does not contain $$x_t$$.
+
+We can write the reverse process(step 3) in DDIM's language.
+Recall that $$\nabla_{x_t}\log p_\theta(x_t)=-\frac{1}{\sqrt{1-\bar{\alpha}_t}}\epsilon_\theta(x_t, t)$$ and we can write the score function for the joint distribution of $$(x_t, y)$$ as follows,
+
+$$
+\begin{aligned}
+\nabla_{\mathbf{x}_t} \log q\left(\mathbf{x}_t, y\right) & =\nabla_{\mathbf{x}_t} \log q\left(\mathbf{x}_t\right)+\nabla_{\mathbf{x}_t} \log q\left(y \mid \mathbf{x}_t\right) \\
+& \approx-\frac{1}{\sqrt{1-\bar{\alpha}_t}} \epsilon_\theta\left(\mathbf{x}_t, t\right)+\nabla_{\mathbf{x}_t} \log p_\phi\left(y \mid \mathbf{x}_t\right) \\
+& =-\frac{1}{\sqrt{1-\bar{\alpha}_t}}\left(\boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t\right)-\sqrt{1-\bar{\alpha}_t} \nabla_{\mathbf{x}_t} \log p_\phi\left(y \mid \mathbf{x}_t\right)\right).
+\end{aligned}
+$$
+
+Therefore, we obtained the new noise prediction $$\hat{\epsilon}(x_t)$$ as
+
+$$
+\begin{equation}
+\hat{\epsilon}(x_t):=\epsilon_\theta(x_t)-\sqrt{1-\bar{\alpha}_t}\nabla_{x_t}\log p_\phi(y\mid x_t).
+\end{equation}
+$$
+
+The paper provided detailed algorithms based on DDPM and DDIM.
+<figure>
+  <img src="../../../assets/img/diffusion-model/classifier-guide-algos.png" style="width:100%">
+  <figcaption>Fig.1 - DDPM and DDIM based classifier-guided diffusion model. </figcaption>
+</figure>
+
+# Classifier-Free Guidance Diffusion model
+Since training an independent classifier $$p_\phi(y\mid x)$$ involved extra effort, <d-cite key="ho2022classifier"></d-cite> proposed algorithm to run conditional diffusion steps without an independent classifier.
+The paper incorporated the scores from a conditional and an unconditional diffusion model.
+
 
 
 # Latent Diffusion Models
@@ -37,7 +91,7 @@ In practice, a VAE can be used first to trimming off pixel-level redundancy and 
 
 The **perception compression process** is depended on an autoencoder model.
 And encoder $$\mathcal{E}$$ encodes an image $$x\in\mathbb{R}^{H\times W\times 3}$$ in RGB space into a latent representation $$z=\mathbb{E}(x)$$, and an decoder $$\mathcal{D}$$ reconstructs the image from its latent $$\tilde{x}=\mathcal{D}(z)=\mathcal{D}(\mathcal{E}(x))$$.
-In contrary to other previous work<d-cite key="esser2021taming">, the paper use a two dimensional latent space to better suit the follow up diffusion model.
+In contrary to other previous work<d-cite key="esser2021taming"></d-cite>, the paper use a two dimensional latent space to better suit the follow up diffusion model.
 The  paper explored two types of regularization in autoencoder to avoid arbitrarily high-variance in the latent space.
 
 * KL-reg: A small KL penalty towards a standard normal.
@@ -93,11 +147,11 @@ The experiment observed that LDM, with proper downsample rate, achieved siginifi
   <figcaption>Fig.4 FID and Inception score under different setup. LDM-k where k means downsample coefficient. As training steps increase, the both scores improves under all circumstance. Meanwhile, LDM-8 achieved siginificant better quality than LDM-1(pixel-based diffusion) and achieved faster. Image source: <d-cite key="rombach2022high"></d-cite> </figcaption>
 </figure>
 
-The LDM also demonstrated better sampling efficiency.
-Moreover, it generate samples faster and at a higher quality.
-
+**Sampling Efficiency**
 <figure>
   <img src="../../../assets/img/diffusion-model/LDM-sampling-efficiency.png" style="width:100%">
   <figcaption>Fig.5 Log FID vs throughput. Left CelebA-HQ and right ImageNet. As we expected, updating reverse diffusion steps in lower dimensional embedding space is less costful and have higher throughput. Moreover, LDM-32 is not only generating samples much faster(visually, at x20) than LDM-1 and LDM-2, it also generate samples with higher quality(in terms of FID). Image source: <d-cite key="rombach2022high"></d-cite> </figcaption>
 </figure>
 
+The LDM also demonstrated better sampling efficiency.
+Moreover, it generates samples faster and at a higher quality.
