@@ -16,6 +16,8 @@ These models achieved state-of-the-art synthesis quality.
 In this post, we are going to discuss some recent works on conditional generation which means guide the generation process with additional conditions.
 A naive solution is to train a diffusion model specific on certain dataset and generate samples with it.
 However, more commonly, we want to generate samples conditioned on class labels or a piece of descriptive text.
+Building on this, an more sophisticated method is add label $$y$$ into input and, therefore, the diffusion process will take class information into consideration.
+However, due to performance reason, there are multiple algorithm have been proposed to achieve higher generation quality.
 
 # Classifier Guided Diffusion
 In order to explicit utilize class label information to guide the diffusion process, <d-cite key="dhariwal2021diffusion"></d-cite> applying the gradient of a trained classifier to guide the diffusion sampling process.
@@ -70,8 +72,25 @@ The paper provided detailed algorithms based on DDPM and DDIM.
 # Classifier-Free Guidance Diffusion model
 Since training an independent classifier $$p_\phi(y\mid x)$$ involved extra effort, <d-cite key="ho2022classifier"></d-cite> proposed algorithm to run conditional diffusion steps without an independent classifier.
 The paper incorporated the scores from a conditional and an unconditional diffusion model.
+The method includes two components:
+1. Replace the previously trained classifier with the implicit classifier according to [Bayesian Rule](https://sander.ai/2022/05/26/guidance.html). 
 
+$$
+\begin{aligned}
+\nabla_{\mathbf{x}_t} \log p\left(y \mid \mathbf{x}_t\right) & =\nabla_{\mathbf{x}_t} \log p\left(\mathbf{x}_t \mid y\right)-\nabla_{\mathbf{x}_t} \log p\left(\mathbf{x}_t\right) \\
+& =-\frac{1}{\sqrt{1-\bar{\alpha}_t}}\left(\boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t, y\right)-\boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t\right)\right)
+\end{aligned}
+$$
 
+2. Use a single neural network to function as two noise generators-- a conditional one and a unconditional one. It can be done by let $$\epsilon_\theta(x_t, t)=\epsilon_\theta(x_t, t, y=\varnothing)$$ for unconditional generation and $$\epsilon_\theta(x_t, t, y)$$ for conditional generation towards class label $$y$$. Therefore, the new noise generation function can be deduced as follows,
+
+$$
+\begin{align}
+\overline{\boldsymbol{\epsilon}}_\theta\left(\mathbf{x}_t, t, y\right) & =\boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t, y\right)-\sqrt{1-\bar{\alpha}_t} w \nabla_{\mathbf{x}_t} \log p\left(y \mid \mathbf{x}_t\right) \\
+& =\boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t, y\right)+w\left(\boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t, y\right)-\boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t\right)\right) \\
+& =(w+1) \boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t, y\right)-w \boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t\right)
+\end{align}
+$$
 
 # Latent Diffusion Models
 Operating on pixel space is exceptional costful.
