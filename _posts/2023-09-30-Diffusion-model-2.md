@@ -2,7 +2,7 @@
 layout: distill
 title: Notes on diffusion model (II) -- Conditional Generation
 date: 2023-09-30
-description: Latent diffusion,
+description: Latent diffusion, classifer-guided and classifier-free diffusion
 tag: ML
 bibliography: reference.bib
 
