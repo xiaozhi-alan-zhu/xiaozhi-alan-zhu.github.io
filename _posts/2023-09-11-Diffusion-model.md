@@ -229,6 +229,10 @@ The entire DDPM algorithm is show as follows.
   <figcaption>Fig.1 - Algorithm of DDPM from <d-cite key="ho2020denoising"></d-cite>. The training process is greatly simplified with the loss function simplification. </figcaption>
 </figure>
 
+**Side notes:**
+The timestep is also an input to the neural network $$\epsilon_\theta(x_t, t)$$ and it is typically encoded into some vector.
+For instance, in DDPM, integer timesteps are encoded into [floats vector through sinusoidal function](https://github.com/hojonathanho/diffusion/blob/master/diffusion_tf/models/unet.py#L99-L103).
+
 
 # Denoising Diffusion Implicit Models (DDIM)
 Though diffusion models like DDPM<d-cite key="ho2020denoising"></d-cite> already demonstrated the ability to produce high quality samples that are comparable with the state-of-the-art generative model, such as GANs, the computation complexity of the sampling process is a critical drawback.
