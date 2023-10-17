@@ -152,7 +152,50 @@ An map $$F_\alpha$$ that transform samples in standard normal to prior distribut
 </figure>
 
 # Latent Point Diffusion Models(LION)
+The latent diffusion model<d-cite key="rombach2022high"></d-cite> in image synthesis conducted the diffusion process in the latent space.
+The paper<d-cite key="vahdat2022lion"></d-cite>, unlike previously mentioned PVD<d-cite key="luo2021diffusion"></d-cite>, applied the similar spirit to the 3D point clouds.
 
+## Formulation
+The model is consist of a VAE to encode shapes to latent space and diffusion models that map vectors from standard normal distribution to latent space.
+
+**Stage 1: VAE**
+
+The VAE part, the encoding-decoding process has three steps:
+1. Use a PVCNN to encode the whole point clouds into a latent vector (shape latent) $$z_0\in \mathbb{R}^{D_z}$$.
+2. Concatenate shape latent with each point in the point cloud. Then use a PVCNN to map point clouds to latent "point clouds" $$h_0\in \mathbb{R}^{3+D_h}$$ in latent space.
+3. Decoding from the concatenation of latent points and shape latent.
+<figure>
+  <img src="../../../assets/img/diffusion-model/lion-stage-1-flowchart.png" class="center" style="height:90%">
+  <figcaption>Fig.6 - LION training-Stage 1: VAE part.</figcaption>
+</figure>
+
+**Stage 2: Diffusion**
+
+There are two diffusion processes involved since there are two latent vectors.
+Both diffusion processes start from standard normal distribution and mapped to shape latent vectors and point latent respectively.
+<figure>
+  <img src="../../../assets/img/diffusion-model/lion-stage-2-flowchart.png" class="center" style="height:90%">
+  <figcaption>Fig.6 - LION training-Stage 1: VAE part.</figcaption>
+</figure>
+
+**Sampling process**
+
+The sample generation process is consist of three steps:
+1. Sample a vector from multivariate standard normal $$z_T$$ distribution and reverse diffused into shape latent $$z_0$$.
+2. Sample a vector from multivariate standard normal $$h_T$$ and concatenate shape latent $$z_0$$ with each intermediate step $$h_t$$ and reversely diffused into point latents.
+
+## Training objective
+During the training of VAE, LION is trained by maximizing a modified variational lower bound on the data log-likelihood with respect to the encoder and ecoder parameters $$\phi$$ and $$\xi$$:
+
+$$
+\begin{aligned}
+\mathcal{L}_{\mathrm{ELBO}}(\boldsymbol{\phi}, \boldsymbol{\xi}) & =\mathbb{E}_{p(\mathbf{x}), q_\phi\left(\mathbf{z}_0 \mid \mathbf{x}\right), q_\phi\left(\mathbf{h}_0 \mid \mathbf{x}, \mathbf{z}_0\right)}\left[\log p_{\boldsymbol{\xi}}\left(\mathbf{x} \mid \mathbf{h}_0, \mathbf{z}_0\right)\right. \\
+& \left.-\lambda_{\mathbf{z}} D_{\mathrm{KL}}\left(q_\phi\left(\mathbf{z}_0 \mid \mathbf{x}\right) \mid p\left(\mathbf{z}_0\right)\right)-\lambda_{\mathbf{h}} D_{\mathrm{KL}}\left(q_\phi\left(\mathbf{h}_0 \mid \mathbf{x}, \mathbf{z}_0\right) \mid p\left(\mathbf{h}_0\right)\right)\right] .
+\end{aligned}
+$$
+
+The priors $$p(z_0)$$ and $$p(h_0)$$ are $$\mathcal{N}(o, I)$$.
+During the training of diffusion models, the models are trained on embeddings and have VAE model fixed.
 
 # 3D-LDM
 
