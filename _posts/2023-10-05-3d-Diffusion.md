@@ -194,11 +194,126 @@ $$
 \end{aligned}
 $$
 
-The priors $$p(z_0)$$ and $$p(h_0)$$ are $$\mathcal{N}(o, I)$$.
+The priors $$p(z_0)$$ and $$p(h_0)$$ are $$\mathcal{N}(0, I)$$.
 During the training of diffusion models, the models are trained on embeddings and have VAE model fixed.
 
 # 3D-LDM
+Many previous works have discussed the limit of different methods of representing 3D shapes.
+Voxels are computationally and memory intensive and thus difficult to scale to high resolution;
+point clouds are light-weight and easy to process, but require a lossy post-processing step to obtain surfaces.
+Another form for representing shapes is SDF(signed distance function)<d-cite key="park2019deepsdf"></d-cite>, it can be used to represent water-tight closed surface.
+In <d-cite key="nam20223d"></d-cite>, the paper proposed using coded shape DeepSDF and use diffusion model to generate code for shapes.
 
+## Formulation
+
+**Coded Shape SDF**: 
+This is a function $$f_\theta(p, z)$$ that maps a point $$p$$ and a latent representation of shapes $$z$$ to a signed distance(positive distance outside and negative distance inside).
+A set of shapes $$\mathcal{S}$$ can be represented with $$f_\theta$$ given a latent representation $$z_i$$:
+
+$$
+\begin{equation}
+\mathcal{S}_i:=\{\mathbf{b}\mid f_\theta(\mathbf{p}, z_i)=0\}.
+\end{equation}
+$$
+
+**Training setup**: 
+DeepSDF<d-cite key="park2019deepsdf"></d-cite> has shown that $$f_\theta$$ can be trained efficiently in an encoder-less setup, called an auto-decoder, where each shape $$S_i$$ is explicitly associated with a latent vector $$z_i$$.
+These latent vectors are randomly assigned at first and learned during training process.
+Therefore, the algorithm is consist of two parts:
+1. Auto-decoder for neural implicit 3D shapes.
+2. Latent diffusion model for generating latent vector.
+
+For **the first part**, the paper parameterizes the SDF with $$\theta$$ and $$Z=\{z_i\}$$ represents latent vectors.
+The objective function is following regularized reconstruction error:
+
+$$
+\begin{gathered}
+\underset{\theta, Z}{\arg \min } \sum_{i=1}^N \mathcal{L}_{\text {recon }}\left(\boldsymbol{z}_i, \mathrm{SDF}_i\right)+\frac{1}{\lambda^2} \mathcal{L}_{\text {reg }}\left(\boldsymbol{z}_i\right) \text {, with } \\
+\mathcal{L}_{\text {recon }}:=\mathbb{E}_{\mathbf{p} \sim \mathcal{P}}\left[\left\|f_\theta\left(\mathbf{p}, \boldsymbol{z}_i\right)-\operatorname{SDF}_i(\mathbf{p})\right\|_1\right] \text {, and } \\
+\mathcal{L}_{\text {reg }}:=\left\|\boldsymbol{z}_i\right\|_2^2 .
+\end{gathered}
+$$
+
+Remarks:
+1. The latent vectors $$z_i$$ was unknown before training and is randomly initialized.
+The training process learns both $$\theta$$ and $$Z$$ at the same time. 
+2. The training data is sampled through algorithm discussed in <d-cite key="park2019deepsdf"></d-cite> section 5.
+In short, for a mesh with proper orientation, the algorithm first generate the shell of the mesh then it densely sample surface points.
+As implemented in <d-cite key="park2019deepsdf"></d-cite>, the data points are sampled within a certain box $$[-\delta, \delta]$$.
+
+For **the second part**, the paper used the latent vectors $$\{z_i\}$$ generated during the training process in the first part as training data.
+The diffusion model follows the DDPM framwork and parameterized the model with $$\epsilon_\phi(z^t, t)$$.
+The paper claimed that they are following <d-cite key="ho2020denoising"></d-cite> that it is more stably and efficiently to train the network to predict the total noise $$z^t-z^0$$.
+(I checked the DDPM paper and did not find related description.
+Personally, I think it is counter-intuitive to predict total noise and use it as step-wise noise.)
+In this framework, the training objective for this phase is:
+
+$$
+\begin{array}{r}
+\underset{\phi}{\arg \min } \sum_{i=1}^N \mathbb{E}\left[\left\|\boldsymbol{\epsilon}_\phi\left(\boldsymbol{z}^t, t\right)-\left(\boldsymbol{z}^t-\boldsymbol{z}_i\right)\right\|_2^2\right], \\
+\text { with } t \sim \mathcal{U}(1, T) \text { and } \boldsymbol{z}^t \sim q\left(\boldsymbol{z}^t \mid \boldsymbol{z}_i\right) .
+\end{array}
+$$
+
+<figure>
+  <img src="../../../assets/img/diffusion-model/3D-LDM-chartflow.png" class="center" style="height:90%">
+  <figcaption>Fig.7 - 3D-LDM training for unconditional generation. Image source <d-cite key="nam20223d"></d-cite> </figcaption>
+</figure>
+
+**Sampling process**
+
+The **unconditional sampling** step is exactly the same as DDPM.
+The reverse process is approximated by $$p_\phi(z^{t-1}\mid z^t)$$ and is parameterized as a Gaussian distribution, where the mean $$\mu_\phi$$ is defined as 
+
+$$
+\mu_\phi\left(\boldsymbol{z}^t, t\right)=\frac{1}{\sqrt{\alpha_t}}\left(\boldsymbol{z}^t-\frac{1-\alpha_t}{\sqrt{1-\bar{\alpha}_t}} \epsilon_\phi\left(\boldsymbol{z}^t, t\right)\right).
+$$
+
+<figure>
+  <img src="../../../assets/img/diffusion-model/3D-LDM-conditional-generation.png" class="center" style="height:90%">
+  <figcaption>Fig.8 - 3D-LDM flowchart for conditional generation using CLIP framework. Image source <d-cite key="nam20223d"></d-cite> </figcaption>
+</figure>
+
+In the cases of **conditional sampling**, CLIP model <d-cite key="radford2021learning"></d-cite> is used to generate embedding for conditional information such as text and image.
+Then, concatenate latent vector with CLIP embedding and the reverse process mean $$\mu_\phi$$ is modified into
+
+$$
+\begin{equation}
+\mu_\phi\left(\boldsymbol{z}^t, \boldsymbol{c}, t\right)=\frac{1}{\sqrt{\alpha_t}}\left(\boldsymbol{z}^t-\frac{1-\alpha_t}{\sqrt{1-\bar{\alpha}_t}} \epsilon_\phi\left(\boldsymbol{z}^t, \boldsymbol{c}, t\right)\right).
+\end{equation}
+$$
 
 # SDFusion
+In 3D-LDM discussed above, the model architecture is an auto-decoder DeepSDF that learns the embedding during training.
+In <d-cite key="cheng2023sdfusion"></d-cite>, the author proposed an encoder-decoder model and, instead of using DeepSDF, used Truncated Signed Distance Field(T-SDF) to represent the shape.
+T-SDF is a simplified version of SDF and it limit or "truncate" the range of distances that we care about.
+It models a 3D shape with a volumetric tensor $$X\in\mathbb{R}^{H\times W\times L}$$.
+The algorithm in this paper is quite similar to previous ones and applied a latent diffusion model framework.
+
+## Formulation
+The algorithm is consist of an auto-encoder for compression T-SDF data and a diffusion model in latent space.
+
+**3D shape Compression of SDF**: 
+The author leveraged a 3D variation of VA-VAE <d-cite key="oord2017neural"></d-cite> and, given an input shape in the form of T-SDF $$X\in\mathbb{R}^{D\times D\times D}$$, we have
+$$
+\begin{equation}
+z=E_\phi(X)\text{, and } X'=D_\tau(\mathrm{VQ}(z)).
+\end{equation}
+$$
+In the above formulation, $$E_\phi \text{ and } D_\tau$$ represent encoder and decoder between 3D space and latent space.
+VQ is the quantization step which maps the latent variable $$z$$ to the nearestt element in the codebook $$\mathcal{Z}$$.
+$$E_\phi, D_\tau,\text{ and } \mathcal{Z}$$ are jointly trained. 
+
+**Latent diffusion model for SDF**: 
+This part is exactly the same as DDPM.
+The paper use a time-conditional 3D UNet to approximate $$\epsilon_\theta$$ and adopt the simplified objective function
+
+$$
+L_{\text {simple }}(\theta):=\mathbb{E}_{\mathbf{z}, \epsilon \sim N(0,1), t}\left[\left\|\epsilon-\epsilon_\theta\left(\mathbf{z}_t, t\right)\right\|^2\right].
+$$
+
+<figure>
+  <img src="../../../assets/img/diffusion-model/SDFusion-flowchart.png" class="center" style="height:90%">
+  <figcaption>Fig.9 - SDFusion flowchart. Image source <d-cite key="cheng2023sdfusion"></d-cite> </figcaption>
+</figure>
 
