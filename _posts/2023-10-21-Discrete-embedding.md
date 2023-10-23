@@ -110,3 +110,8 @@ It amis to make sure the encoder commits to an embedding.
 # Why we are interested in discrete latent spaces? Are they better than continuous one?
 Discrete latent spaces compress the information in the dataset more efficiently.
 Also, duo to the density matching property of vector quantisation, the latent space becomes more diverse with respect to the most diverse features within the data distribution.
+
+<figure>
+  <img src="../../../assets/img/generative-model/vq-vae-examples.png" style="width:100%">
+  <figcaption>Fig.3 - VQ-VAE samples (left) and BigGAN deep samples (right) trained on ImageNet. Image source: https://shashank7-iitd.medium.com/understanding-vector-quantized-variational-autoencoders-vq-vae-323d710a888a. </figcaption>
+</figure>
