@@ -14,3 +14,10 @@ $max-content-width: {{ site.max_width }};
   "distill",
   "cv"
 ;
+
+.center {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: 50%;
+}
