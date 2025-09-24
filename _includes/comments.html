@@ -1,0 +1,27 @@
+<!-- Comments powered by Giscus.
+  Setup steps:
+  1) Create/choose a repo to store discussions (e.g. USERNAME/your-site-comments).
+  2) Enable "Discussions" in that repo (Settings -> General -> Features).
+  3) Install the Giscus GitHub App and allow it to access that repo.
+  4) Visit https://giscus.app to generate values for repo, repo-id, category, category-id, etc.
+  5) Fill the 'giscus' block in _config.yml accordingly.
+-->
+
+{% if site.giscus and site.giscus.repo and site.giscus.repo-id and site.giscus.category-id %}
+  <script src="https://giscus.app/client.js"
+          data-repo="{{ site.giscus.repo }}"
+          data-repo-id="{{ site.giscus.repo-id }}"
+          data-category="{{ site.giscus.category | default: 'Comments' }}"
+          data-category-id="{{ site.giscus.category-id }}"
+          data-mapping="{{ site.giscus.mapping | default: 'pathname' }}"
+          data-strict="{{ site.giscus.strict | default: '1' }}"
+          data-reactions-enabled="{{ site.giscus.reactions | default: '1' }}"
+          data-emit-metadata="{{ site.giscus.emit | default: '0' }}"
+          data-input-position="{{ site.giscus.input | default: 'top' }}"
+          data-theme="{{ site.giscus.theme | default: 'light' }}"
+          crossorigin="anonymous"
+          async>
+  </script>
+{% else %}
+  <!-- Giscus not configured yet. Set 'giscus' keys in _config.yml to enable comments. -->
+{% endif %}

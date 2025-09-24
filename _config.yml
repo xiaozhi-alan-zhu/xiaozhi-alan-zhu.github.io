@@ -1,0 +1,30 @@
+title: "Xiaozhi Zhu's Website"
+description: "Applied mathematician, AI researcher"
+author:
+  name: "Xiaozhi(Alan) Zhu"
+  email: "xiaozhizhu1994@gmail.com"
+  location: "Redmond, WA"
+  scholar: "https://scholar.google.com/citations?user=SCHOLAR_ID&user=476oUoEAAAAJ"
+  linkedin:
+
+
+baseurl: ""
+url: "https://username.github.io"
+excerpt_separator: <!--more-->
+
+markdown: kramdown
+kramdown:
+  input: GFM
+  math_engine: mathjax
+
+plugins:
+  - jekyll-feed
+  - jekyll-seo-tag
+  - jekyll-scholar
+
+scholar:
+  style: ieee              # or 'apa', 'acm-sig-proceedings', etc. (CSL file also supported)
+  locale: en
+  source: /_bibliography/
+  bibliography: papers.bib
+  link-bibliography: true

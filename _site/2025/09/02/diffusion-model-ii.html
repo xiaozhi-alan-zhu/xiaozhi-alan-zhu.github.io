@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Notes on Diffusion Model (II) -- Conditional Generation — Xiaozhi Zhu's Website</title>
+  <!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Notes on Diffusion Model (II) – Conditional Generation | Xiaozhi Zhu’s Website</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Notes on Diffusion Model (II) – Conditional Generation" />
+<meta name="author" content="Xiaozhi(Alan) Zhu" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Advanced diffusion models for conditional generation, covering classifier-guided diffusion, classifier-free guidance, and latent diffusion models. Explores techniques for controlling image generation using class labels, text prompts, and other conditional inputs." />
+<meta property="og:description" content="Advanced diffusion models for conditional generation, covering classifier-guided diffusion, classifier-free guidance, and latent diffusion models. Explores techniques for controlling image generation using class labels, text prompts, and other conditional inputs." />
+<link rel="canonical" href="http://localhost:4000/2025/09/02/diffusion-model-ii.html" />
+<meta property="og:url" content="http://localhost:4000/2025/09/02/diffusion-model-ii.html" />
+<meta property="og:site_name" content="Xiaozhi Zhu’s Website" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2025-09-02T00:00:00-07:00" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Notes on Diffusion Model (II) – Conditional Generation" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"Xiaozhi(Alan) Zhu"},"dateModified":"2025-09-02T00:00:00-07:00","datePublished":"2025-09-02T00:00:00-07:00","description":"Advanced diffusion models for conditional generation, covering classifier-guided diffusion, classifier-free guidance, and latent diffusion models. Explores techniques for controlling image generation using class labels, text prompts, and other conditional inputs.","headline":"Notes on Diffusion Model (II) – Conditional Generation","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/2025/09/02/diffusion-model-ii.html"},"url":"http://localhost:4000/2025/09/02/diffusion-model-ii.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+  <link rel="stylesheet" href="/assets/css/style.css">
+
+  <!-- MathJax config to allow $...$ and $$...$$ -->
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$','$$'], ['\\[','\\]']],
+        tags: 'ams'
+      },
+      options: {
+        skipHtmlTags: ['noscript','style','textarea','pre','code']
+      }
+    };
+  </script>
+  <script id="MathJax-script" async
+    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <h1 class="site-title"><a href="/">Xiaozhi Zhu's Website</a></h1>
+      <nav class="site-nav">
+        <a href="/">Main</a>
+        <a href="/cv.html">CV</a>
+        <a href="/posts.html">Posts</a>
+        <a href="/tags.html">Tags</a>
+      </nav>
+    </div>
+  </header>
+  <main class="container">
+    <article class="post">
+  <h1>Notes on Diffusion Model (II) -- Conditional Generation</h1>
+  <p><small>Published on September 2, 2025</small></p>
+
+  <h1 id="introduction">Introduction</h1>
+<p>In previous discussion, we have shown power of pixel-based idiffusion models on a variety of dataset and tasks such as image synthesis and sampling.
+These models achieved state-of-the-art synthesis quality.
+In this post, we are going to discuss some recent works on conditional generation which means guide the generation process with additional conditions.
+A naive solution is to train a diffusion model specific on certain dataset and generate samples with it.
+However, more commonly, we want to generate samples conditioned on class labels or a piece of descriptive text.
+Building on this, an more sophisticated method is add label \(y\) into input and, therefore, the diffusion process will take class information into consideration.
+However, due to performance reason, there are multiple algorithm have been proposed to achieve higher generation quality.</p>
+
+<h1 id="classifier-guided-diffusion">Classifier Guided Diffusion</h1>
+<p>In order to explicit utilize class label information to guide the diffusion process, <a class="citation" href="#dhariwal2021diffusion">[1]</a> applying the gradient of a trained classifier to guide the diffusion sampling process.</p>
+
+<p>There are three important components in this approach: classifier training, incorporate label information into diffusion model training and classifier-guided sample generation.</p>
+
+<ol>
+  <li><strong>Classifier training</strong>:
+ A classifier \(p(y\mid x)\) can be exploited to improve a diffusion generator by providing gradient \(\nabla_x p(y\mid x)\) to the sampling process.
+ Since the generated images at intermediate steps are noisy, the trained classifier should be able to adapt to these noises.
+ Therefore, the classifier \(p_\phi(y\mid x_t, t)\) is trained on noisy images \(x_t\) and then use gradients \(\nabla_{x_t}\log p_\phi(y|x_t, t)\) to guide the diffusion sampling process towards an arbitrary class label y.</li>
+  <li><strong>Adaptive group normalization</strong>:
+ The paper incorporated adaptive group normalization layer \(\mathrm{AdaGN}(h,y)=y_s\mathrm{GroupNorm}(h)+y_b\) into the neural network, where \(h\) is the output of previous hidden layer and \(y=[y_s, y_b]\) is obtained from a linear projection of the timestep and class embedding.</li>
+  <li><strong>Conditional reverse noising process</strong>:
+ The paper <a class="citation" href="#dhariwal2021diffusion">[1]</a> proved that the reverse transition distribution can be written in the form as \(p_{\theta, \phi}\left(x_t \mid x_{t+1}, y\right)=Z p_\theta\left(x_t \mid x_{t+1}\right) p_\phi\left(y \mid x_t\right)\).<br />
+ This can be observed from the following relationship:
+ \(\begin{align}
+     q(x_t\mid x_{t+1}, y)=&amp;\frac{q(x_t,x_{t+1}, y)}{q(x_{t+1},y)}\nonumber\\
+     =&amp;q(y\mid x_t, x_{t+1})\frac{q(x_t, x_{t+1})}{q(x_{t+1}, y)}\nonumber\\
+     =&amp;\left(\frac{q(x_{t+1}\mid x_t, y)q(x_t, y)}{q(x_t,x_{t+1})}\right)\frac{q(x_t\mid x_{t+1})}{q(y\mid x_{t+1})}\nonumber\\
+     =&amp;\left(\frac{q(x_{t+1}\mid x_t)q(y\mid x_t)}{q(x_{t+1}\mid x_t)}\right)\frac{q(x_t\mid x_{t+1})}{q(y\mid x_{t+1})}\nonumber\\
+     =&amp;\frac{q(x_t\mid x_{t+1})q(y\mid x_t)}{q(y\mid x_{t+1})},
+ \end{align}\)
+ where \(q(y\mid x_{t+1})\) can be viewed as a constant since it does not contain \(x_t\).</li>
+</ol>
+
+<p>We can write the reverse process(step 3) in DDIM’s language.
+Recall that \(\nabla_{x_t}\log p_\theta(x_t)=-\frac{1}{\sqrt{1-\bar{\alpha}_t}}\epsilon_\theta(x_t, t)\) and we can write the score function for the joint distribution of \((x_t, y)\) as follows,</p>
+
+\[\begin{aligned}
+\nabla_{\mathbf{x}_t} \log q\left(\mathbf{x}_t, y\right) &amp; =\nabla_{\mathbf{x}_t} \log q\left(\mathbf{x}_t\right)+\nabla_{\mathbf{x}_t} \log q\left(y \mid \mathbf{x}_t\right) \\
+&amp; \approx-\frac{1}{\sqrt{1-\bar{\alpha}_t}} \epsilon_\theta\left(\mathbf{x}_t, t\right)+\nabla_{\mathbf{x}_t} \log p_\phi\left(y \mid \mathbf{x}_t\right) \\
+&amp; =-\frac{1}{\sqrt{1-\bar{\alpha}_t}}\left(\boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t\right)-\sqrt{1-\bar{\alpha}_t} \nabla_{\mathbf{x}_t} \log p_\phi\left(y \mid \mathbf{x}_t\right)\right).
+\end{aligned}\]
+
+<p>Therefore, we obtained the new noise prediction \(\hat{\epsilon}(x_t)\) as</p>
+
+\[\begin{equation}
+\hat{\epsilon}(x_t):=\epsilon_\theta(x_t)-\sqrt{1-\bar{\alpha}_t}\nabla_{x_t}\log p_\phi(y\mid x_t).
+\end{equation}\]
+
+<p>The paper provided detailed algorithms based on DDPM and DDIM.</p>
+<figure>
+  <img src="../../../assets/img/diffusion-model/classifier-guide-algos.png" style="width:100%" />
+  <figcaption>Fig.1 - DDPM and DDIM based classifier-guided diffusion model. </figcaption>
+</figure>
+
+<h1 id="classifier-free-guidance-diffusion-model">Classifier-Free Guidance Diffusion model</h1>
+<p>Since training an independent classifier \(p_\phi(y\mid x)\) involved extra effort, <a class="citation" href="#ho2022classifier">[2]</a> proposed algorithm to run conditional diffusion steps without an independent classifier.
+The paper incorporated the scores from a conditional and an unconditional diffusion model.
+The method includes two components:</p>
+<ol>
+  <li>Replace the previously trained classifier with the implicit classifier according to <a href="https://sander.ai/2022/05/26/guidance.html">Bayesian Rule</a>.
+\(\begin{aligned}
+\nabla_{\mathbf{x}_t} \log p\left(y \mid \mathbf{x}_t\right) &amp; =\nabla_{\mathbf{x}_t} \log p\left(\mathbf{x}_t \mid y\right)-\nabla_{\mathbf{x}_t} \log p\left(\mathbf{x}_t\right) \\
+&amp; =-\frac{1}{\sqrt{1-\bar{\alpha}_t}}\left(\boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t, y\right)-\boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t\right)\right)
+\end{aligned}\)</li>
+  <li>Use a single neural network to function as two noise generators– a conditional one and a unconditional one. It can be done by let \(\epsilon_\theta(x_t, t)=\epsilon_\theta(x_t, t, y=\varnothing)\) for unconditional generation and \(\epsilon_\theta(x_t, t, y)\) for conditional generation towards class label \(y\). Therefore, the new noise generation function can be deduced as follows.</li>
+</ol>
+
+\[\begin{align}
+\overline{\boldsymbol{\epsilon}}_\theta\left(\mathbf{x}_t, t, y\right) &amp; =\boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t, y\right)-\sqrt{1-\bar{\alpha}_t} w \nabla_{\mathbf{x}_t} \log p\left(y \mid \mathbf{x}_t\right) \\
+&amp; =\boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t, y\right)+w\left(\boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t, y\right)-\boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t\right)\right) \\
+&amp; =(w+1) \boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t, y\right)-w \boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t\right)
+\end{align}\]
+
+<h1 id="latent-diffusion-models">Latent Diffusion Models</h1>
+<p>Operating on pixel space is exceptional costful.
+For algorithms like diffusion models, it is even more demanding, since the recursive updates amplified this cost.
+A common solution in ML to deal with high dimensionality is embedding data into lower dimensional latent space.
+It is observed in <a class="citation" href="#rombach2022high">[3]</a> that most bits of an image contribute to perceptual details and the semantic and conceptual composition remains intact  after undergoing aggressive compression.
+This motivates <a class="citation" href="#rombach2022high">[3]</a>  to first embed the image into latent space, with models like VAE, then train a diffusion model in latent space.
+Moreover, it loosely decomposes the perceptual compression (removing high-frequency details) and semantic compression (semantic and conceptual composition of the data).
+In practice, a VAE can be used first to trimming off pixel-level redundancy and an U-Net backboned diffusion process can be used to learn to manipulate semantic concepts.</p>
+<figure>
+  <img src="../../../assets/img/diffusion-model/sematic-perceptual-comp.png" style="width:100%" />
+  <figcaption>Fig.1 - The plot shows the [rate-distortion trade-off](https://en.wikipedia.org/wiki/Rate%E2%80%93distortion_theory). Notice that semantic compression and perceptual compression happens at different stages in the plot. The graph is taken from <a class="citation" href="#rombach2022high">[3]</a>. Bits per dim and RMSE measures different aspect for generative model. Details can be found in <a class="citation" href="#theis2015note">[4]</a>. [Simple explaination.](https://blog.csdn.net/fanyue1997/article/details/109703025)</figcaption>
+</figure>
+
+<h2 id="methods">Methods</h2>
+
+<p>The <strong>perception compression process</strong> is depended on an autoencoder model.
+And encoder \(\mathcal{E}\) encodes an image \(x\in\mathbb{R}^{H\times W\times 3}\) in RGB space into a latent representation \(z=\mathbb{E}(x)\), and an decoder \(\mathcal{D}\) reconstructs the image from its latent \(\tilde{x}=\mathcal{D}(z)=\mathcal{D}(\mathcal{E}(x))\).
+In contrary to other previous work <a class="citation" href="#esser2021taming">[5]</a>, the paper use a two dimensional latent space to better suit the follow up diffusion model.
+The  paper explored two types of regularization in autoencoder to avoid arbitrarily high-variance in the latent space.</p>
+
+<ul>
+  <li>KL-reg: A small KL penalty towards a standard normal.</li>
+  <li>VQ-reg: Uses a vector quantization layer within the decoder, like VQVAE but the quantization layer absorbed by the decoder.</li>
+</ul>
+
+<p>The <strong>semantic compression</strong> stage happens in the latent space.
+After the autoencoder, the paper construct a diffusion model in latent space with U-Net being the backbone neural network.
+Denote the backbone neural network as \(\epsilon_\theta(\circ, t)\) and the loss function is</p>
+
+\[\begin{equation}\label{eq:LDM-loss}
+L_{L D M}:=\mathbb{E}_{\mathcal{E}(x), \epsilon \sim \mathcal{N}(0,1), t}\left[\left\|\epsilon-\epsilon_\theta\left(z_t, t\right)\right\|_2^2\right].
+\end{equation}\]
+
+<p>As in many other generative models and the topic of this blog, <strong>conditional mechanisms</strong> can be applied to this framework and, to be more specific, in the latent space.
+The paper implemented this by adding the additional inputs \(y\) to the denoising autoencoder as \(\epsilon_\theta\left(z_t, t, y\right)\).
+The additional inputs \(y\) can be text, semantics maps or other “embedible information” like images and it aims to controll the synthesis process.</p>
+
+<ol>
+  <li>
+    <p>Due to the various modalities of the inputs, the paper first project the inputs \(y\) to an “intermediate representation”(embedding) \(\tau_\theta(y)\in\mathbb{R}^{M\times d_\tau}\).</p>
+  </li>
+  <li>
+    <p>Cross-attention layer is used to apply controlling signal \(\tau_\theta(y)\) to the diffusion process through U-Net backbone. To be more specific, \(\mathrm{Attention}(Q, K, V)=\mathrm{softmax}\left(\frac{QK^T}{\sqrt{d}}\right)\), with</p>
+  </li>
+</ol>
+
+\[Q=W_Q^{(i)} \cdot \varphi_i\left(z_t\right), K=W_K^{(i)} \cdot \tau_\theta(y), V=W_V^{(i)} \cdot \tau_\theta(y).\]
+
+<p>Based on image-conditioning pairs, we then learn the conditional LDM via the loss</p>
+
+\[L_\mathrm{LDM}:=\mathbb{E}_{\mathcal{E}(x), y, \epsilon \sim \mathcal{N}(0,1), t}\left[\left\|\epsilon-\epsilon_\theta\left(z_t, t, \tau_\theta(y)\right)\right\|_2^2\right].\]
+
+<figure>
+  <img src="../../../assets/img/diffusion-model/LDM-flowchart.png" style="width:100%" />
+  <figcaption>Fig.2 . Image source: <a class="citation" href="#rombach2022high">[3]</a> </figcaption>
+</figure>
+
+<h2 id="experiments">Experiments</h2>
+<p>The paper examine the model performance in two aspects:</p>
+<ol>
+  <li>Enerated samples’ perceptual quality and training efficiency</li>
+  <li>Sampling efficiency</li>
+</ol>
+
+<p><strong>Perceptual Compression Tradeoffs</strong></p>
+<figure>
+  <img src="../../../assets/img/diffusion-model/LDM-example.png" style="width:100%" />
+  <figcaption>Fig.3 Image samples generated from LDM-8(KL) on LAION dataset with 200 DDIM steps. Perceptually, the LDM is capable of generating high fidelity images under the prompt constraint. Image source: <a class="citation" href="#rombach2022high">[3]</a> </figcaption>
+</figure>
+<p>In this experiment, the paper compared FID/Inception scores under different downsample rate at different training steps.
+The experiment observed that LDM, with proper downsample rate, achieved siginificant better FID scores comparing with pixel-based diffusion model.</p>
+<figure>
+  <img src="../../../assets/img/diffusion-model/LDM-training-efficiency.png" style="width:100%" />
+  <figcaption>Fig.4 FID and Inception score under different setup. LDM-k where k means downsample coefficient. As training steps increase, the both scores improves under all circumstance. Meanwhile, LDM-8 achieved siginificant better quality than LDM-1(pixel-based diffusion) and achieved faster. Image source: <a class="citation" href="#rombach2022high">[3]</a> </figcaption>
+</figure>
+
+<p><strong>Sampling Efficiency</strong></p>
+<figure>
+  <img src="../../../assets/img/diffusion-model/LDM-sampling-efficiency.png" style="width:100%" />
+  <figcaption>Fig.5 Log FID vs throughput. Left CelebA-HQ and right ImageNet. As we expected, updating reverse diffusion steps in lower dimensional embedding space is less costful and have higher throughput. Moreover, LDM-32 is not only generating samples much faster(visually, at x20) than LDM-1 and LDM-2, it also generate samples with higher quality(in terms of FID). Image source: <a class="citation" href="#rombach2022high">[3]</a> </figcaption>
+</figure>
+
+<p>The LDM also demonstrated better sampling efficiency.
+Moreover, it generates samples faster and at a higher quality.</p>
+
+<h1 id="references">References</h1>
+<ol class="bibliography"><li><span id="dhariwal2021diffusion">[1]P. Dhariwal and A. Nichol, “Diffusion models beat gans on image synthesis,” <i>Advances in neural information processing systems</i>, vol. 34, pp. 8780–8794, 2021.</span></li>
+<li><span id="ho2022classifier">[2]J. Ho and T. Salimans, “Classifier-free diffusion guidance,” <i>arXiv preprint arXiv:2207.12598</i>, 2022.</span></li>
+<li><span id="rombach2022high">[3]R. Rombach, A. Blattmann, D. Lorenz, P. Esser, and B. Ommer, “High-resolution image synthesis with latent diffusion models,” in <i>Proceedings of the IEEE/CVF conference on computer vision and pattern recognition</i>, 2022, pp. 10684–10695.</span></li>
+<li><span id="theis2015note">[4]L. Theis, A. van den Oord, and M. Bethge, “A note on the evaluation of generative models,” <i>arXiv preprint arXiv:1511.01844</i>, 2015.</span></li>
+<li><span id="esser2021taming">[5]P. Esser, R. Rombach, and B. Ommer, “Taming transformers for high-resolution image synthesis,” in <i>Proceedings of the IEEE/CVF conference on computer vision and pattern recognition</i>, 2021, pp. 12873–12883.</span></li></ol>
+
+
+  
+  <p class="tags">Tags:
+    
+      <a href="/tags.html#ml">#ML</a>, 
+    
+      <a href="/tags.html#cv">#CV</a>, 
+    
+      <a href="/tags.html#diffusion-model">#Diffusion Model</a>
+    
+  </p>
+  
+
+  <!-- Comments powered by Giscus.
+  Setup steps:
+  1) Create/choose a repo to store discussions (e.g. USERNAME/your-site-comments).
+  2) Enable "Discussions" in that repo (Settings -> General -> Features).
+  3) Install the Giscus GitHub App and allow it to access that repo.
+  4) Visit https://giscus.app to generate values for repo, repo-id, category, category-id, etc.
+  5) Fill the 'giscus' block in _config.yml accordingly.
+-->
+
+
+  <!-- Giscus not configured yet. Set 'giscus' keys in _config.yml to enable comments. -->
+
+
+</article>
+
+  </main>
+  <footer class="site-footer">
+    <div class="container">
+      <small>&copy; 2025 Xiaozhi(Alan) Zhu</small>
+    </div>
+  </footer>
+</body>
+</html>

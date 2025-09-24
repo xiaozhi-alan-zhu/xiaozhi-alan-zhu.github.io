@@ -1,0 +1,25 @@
+---
+layout: page
+title: "Tags"
+permalink: /tags.html
+---
+
+<h2>Tags</h2>
+<p>Click a tag to jump to its section.</p>
+
+{% assign tags = site.tags %}
+<ul class="tag-list">
+  {% for tag in tags %}
+    <li><a href="#{{ tag[0] | slugify }}">#{{ tag[0] }}</a> ({{ tag[1].size }})</li>
+  {% endfor %}
+</ul>
+
+{% for tag in tags %}
+  {% assign name = tag[0] %}
+  <h3 id="{{ name | slugify }}">#{{ name }}</h3>
+  <ul>
+    {% for post in site.tags[name] %}
+      <li><a href="{{ post.url | relative_url }}">{{ post.title }}</a> — <small>{{ post.date | date: '%B %-d, %Y' }}</small></li>
+    {% endfor %}
+  </ul>
+{% endfor %}

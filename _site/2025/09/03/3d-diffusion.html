@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Diffusion Models for 3D Shape Generation — Xiaozhi Zhu's Website</title>
+  <!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Diffusion Models for 3D Shape Generation | Xiaozhi Zhu’s Website</title>
+<meta name="generator" content="Jekyll v4.4.1" />
+<meta property="og:title" content="Diffusion Models for 3D Shape Generation" />
+<meta name="author" content="Xiaozhi(Alan) Zhu" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Incomprehensive survey of diffusion models for 3D shape generation, covering Point-Voxel Diffusion (PVD), Diffusion Probabilistic Models (DPM), LION, 3D-LDM, and SDFusion. Explores different 3D representations (point clouds, voxels, SDF) and their integration with diffusion frameworks for generating high-quality 3D shapes." />
+<meta property="og:description" content="Incomprehensive survey of diffusion models for 3D shape generation, covering Point-Voxel Diffusion (PVD), Diffusion Probabilistic Models (DPM), LION, 3D-LDM, and SDFusion. Explores different 3D representations (point clouds, voxels, SDF) and their integration with diffusion frameworks for generating high-quality 3D shapes." />
+<link rel="canonical" href="http://localhost:4000/2025/09/03/3d-diffusion.html" />
+<meta property="og:url" content="http://localhost:4000/2025/09/03/3d-diffusion.html" />
+<meta property="og:site_name" content="Xiaozhi Zhu’s Website" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2025-09-03T00:00:00-07:00" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Diffusion Models for 3D Shape Generation" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"Xiaozhi(Alan) Zhu"},"dateModified":"2025-09-03T00:00:00-07:00","datePublished":"2025-09-03T00:00:00-07:00","description":"Incomprehensive survey of diffusion models for 3D shape generation, covering Point-Voxel Diffusion (PVD), Diffusion Probabilistic Models (DPM), LION, 3D-LDM, and SDFusion. Explores different 3D representations (point clouds, voxels, SDF) and their integration with diffusion frameworks for generating high-quality 3D shapes.","headline":"Diffusion Models for 3D Shape Generation","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/2025/09/03/3d-diffusion.html"},"url":"http://localhost:4000/2025/09/03/3d-diffusion.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+  <link rel="stylesheet" href="/assets/css/style.css">
+
+  <!-- MathJax config to allow $...$ and $$...$$ -->
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$','$$'], ['\\[','\\]']],
+        tags: 'ams'
+      },
+      options: {
+        skipHtmlTags: ['noscript','style','textarea','pre','code']
+      }
+    };
+  </script>
+  <script id="MathJax-script" async
+    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <h1 class="site-title"><a href="/">Xiaozhi Zhu's Website</a></h1>
+      <nav class="site-nav">
+        <a href="/">Main</a>
+        <a href="/cv.html">CV</a>
+        <a href="/posts.html">Posts</a>
+        <a href="/tags.html">Tags</a>
+      </nav>
+    </div>
+  </header>
+  <main class="container">
+    <article class="post">
+  <h1>Diffusion Models for 3D Shape Generation</h1>
+  <p><small>Published on September 3, 2025</small></p>
+
+  <h1 id="introduction">Introduction</h1>
+<p>Diffusion model has proven to be a very powerful generative model and achieved huge success in image synthesis.
+One of the most widely known application is the synthesis of images condition on text or image input.
+Models like … take one step further to generate short videos based on instruction.</p>
+
+<p>Meanwhile extending this power model to 3D is far from trivial.
+It can be represented in point, voxel, surface and etc.
+Unlike image data, all these forms are less structured and should be invariant w.r.t. permutation.
+Each of the above data structures requires different techniques to deal with(i.e. PointNet for point cloud, graph neural network for surface data etc).</p>
+
+<h1 id="point-voxel-diffusion">Point-Voxel diffusion</h1>
+<p>Direct application of diffusion models on either voxel and point representation results in poor generation quality.
+The paper <a class="citation" href="#zhou20213d">[1]</a> proposed Point-Voxel diffusion(PVD) that utilize both point-wise and voxel-wise information to guide diffusion.
+The framework is almost exactly the same as DDPM except for the choice of backbone network.
+Instead of using U-Net to denoise, the paper applied point-voxel CNN <a class="citation" href="#liu2019point">[2]</a> to parameterize their model.
+Point-voxel CNN is capable of extract features from point cloud data and requires much less computational resource than previous methods(i.e. PointNet).</p>
+
+<h2 id="quick-review-of-ddpm">Quick review of DDPM</h2>
+<p>Here, we quickly review the training and sampling process with diffusion model.
+The DDPM parameterize the model learn the “noise” \(\epsilon_\theta(x_t, t)\) and the paper used a point-voxel CNN to represent \(\epsilon_\theta(x_t, t)\).
+The loss function is</p>
+
+\[\begin{align}
+\min_{x_t, \epsilon\sim\mathcal{N}(0, I)}&amp;\|\epsilon-\epsilon_\theta(x_t, t)\|^2_2\\
+\text{where } x_t =&amp; \sqrt{\bar{\alpha}_t}x_0 + \sqrt{1-\bar{\alpha}_t}\epsilon.
+\end{align}\]
+
+<p>WIth a trained model \(\epsilon_\theta(x_t, t)\), the sampling process is
+\(\begin{equation}
+\mathbf{x}_{t-1}=\frac{1}{\sqrt{\alpha_t}}\left(\mathbf{x}_t-\frac{1-\alpha_t}{\sqrt{1-\tilde{\alpha}_t}} \boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t\right)\right)+\sqrt{\beta_t} \mathbf{z},
+\end{equation}\)
+where \(z\sim \mathcal{N}(o, I)\).</p>
+
+<p>In the context of this paper, $x_0\in\mathbb{R}^{N\times 3}$ is point cloud data.</p>
+
+<h2 id="experiment">Experiment</h2>
+<p>In the experiment part, the paper tested the algorithm on tasks of shape generation and shape completeion.
+It examined metrics such as <a href="https://pdal.io/en/latest/apps/chamfer.html">Chamfer Distance(CD)</a>, <a href="https://en.wikipedia.org/wiki/Earth_mover%27s_distance">Earth Mover’s Distance(EMD)</a> and etc.</p>
+
+<figure>
+  <img src="../../../assets/img/diffusion-model/PVD-generation-samples.png" style="width:100%" />
+  <figcaption>Fig.1 - Comparison of samples generated from different methods. We can observe that Voxel based diffusion is not enough to generate high quality samples.</figcaption>
+</figure>
+
+<h1 id="diffusion-probabilistic-models-for-3d-point-cloud-generationdpm">Diffusion Probabilistic Models for 3D Point Cloud Generation(DPM)</h1>
+
+<p>The paper <a class="citation" href="#luo2021diffusion">[3]</a> proposed a framework that introduced latent encoding to the DDPM.
+The diffusion process and reverse process still happens in physical space, not in latent space.
+The latent variable is used as a guidence during the reverse process.</p>
+
+<p>For clarity of discussion, we denote \(\boldsymbol{X}=\{x_i\}_{i\in[N]}\) to be a 3D shape in the form of point cloud and \(x_i\in \mathbb{R}^3\) for \(i\in [N]\) represents each point in the point cloud.
+Let \(\tilde{p}(\boldsymbol{X})\) be the distribution of shapes \(\boldsymbol{X}\) and \(p(x)\) be the distribution of points in arbitrary shapes.</p>
+
+<h2 id="formulation">Formulation</h2>
+<p>The paper introduced a latent variable \(\boldsymbol{z}\sim q_\varphi(\boldsymbol{z}\mid\boldsymbol{X}^{(0)})=\mathcal{N}\left(z\mid\mu_\varphi(\boldsymbol{X}^{(0)}, \Sigma_\varphi(\boldsymbol{X}^{(0)}))\right)\).
+However, instead of apply diffusion process in latent space as in <a class="citation" href="#rombach2022high">[4]</a>, it is used only as a guidence during the diffusion \(\boldsymbol{X}^{(t-1)}\sim p_\theta(\cdot\mid\boldsymbol{X}^{(t)}, \boldsymbol{z})\).
+More importantly, unlike PVD or image-based diffusion model, the diffusion process is conducted pointwisely.
+To be more specific, each point in a point cloud is diffused separately \(x_i^{(t-1)}\sim p_\theta\left(\cdot\mid x_i^{(t)}, z\right)\).
+The paper further concluded that points in a given point cloud is conditionally independent(given the point cloud/shape) and, mathematically, can be formulated as
+\(\begin{equation}
+\tilde{p}_\theta(\boldsymbol{X}\mid\boldsymbol{z})=\prod_{i=1}^N p_\theta(x_i\mid\boldsymbol{z}).
+\end{equation}\)</p>
+
+<p>This is also shown in the following graphical model.</p>
+<figure>
+  <img src="../../../assets/img/diffusion-model/DPM-graphical-model.png" style="width:100%" />
+  <figcaption>Fig.2 - The graphical model of the Diffusion Probabilistic Model. The latent embedding is used as a stand alone information. The start point of the diffusion is still Gaussian distributed points in 3D physical space.</figcaption>
+</figure>
+
+<p>In comparison, the PVD update each reverse diffusion step through updating all points simutaniously and can be viewed as following graphical model.</p>
+<figure>
+  <img src="../../../assets/img/diffusion-model/PVD-graphical-model.png" style="width:30%" />
+  <figcaption>Fig.3 - The graphical model of the PVD. In PVD's algorithm, all points in point cloud is input information for updating a diffusion step.</figcaption>
+</figure>
+
+<p>The forward process is the same as DDPM or PVD which is simply adding noise to the points.
+The reverse process is formulated as</p>
+
+\[\begin{gathered}
+p_{\boldsymbol{\theta}}\left(\boldsymbol{x}^{(0: T)} \mid \boldsymbol{z}\right)=p\left(\boldsymbol{x}^{(T)}\right) \prod_{t=1}^T p_{\boldsymbol{\theta}}\left(\boldsymbol{x}^{(t-1)} \mid \boldsymbol{x}^{(t)}, \boldsymbol{z}\right), \\
+p_{\boldsymbol{\theta}}\left(\boldsymbol{x}^{(t-1)} \mid \boldsymbol{x}^{(t)}, \boldsymbol{z}\right)=\mathcal{N}\left(\boldsymbol{x}^{(t-1)} \mid \boldsymbol{\mu}_{\boldsymbol{\theta}}\left(\boldsymbol{x}^{(t)}, t, \boldsymbol{z}\right), \beta_t \boldsymbol{I}\right)。
+\end{gathered}\]
+
+<p>In this setup, \(p_\theta(x^{(0)})\) represent an image’s probability under the learned model \(p_\theta\) and, in below, we will use \(q_\varphi(z\mid \boldsymbol{X}^{(0)})\) as the encoder.
+For simplicity of discussion, we will use \(p_\theta\) to replace \(\tilde{p}_\theta\).</p>
+
+<h2 id="training-objective">Training objective</h2>
+<p>Similar to DDPM, the log-likelihood of reverse process \(p_\theta(x^{(0)})\) can be lower bounded by</p>
+
+\[\begin{aligned}
+\mathbb{E}\left[\log p_{\boldsymbol{\theta}}\left(\boldsymbol{X}^{(0)}\right)\right] &amp;\geq \mathbb{E}_q  {\left[\log \frac{p_{\boldsymbol{\theta}}\left(\boldsymbol{X}^{(0: T)}, \boldsymbol{z}\right)}{q\left(\boldsymbol{X}^{(1: T)}, \boldsymbol{z} \mid \boldsymbol{X}^{(0)}\right)}\right] } \\
+&amp;=\mathbb{E}_q\left[\log p\left(\boldsymbol{X}^{(T)}\right)\right.  \\
+&amp;~~~~~~ +\sum_{t=1}^T \log \frac{p_{\boldsymbol{\theta}}\left(\boldsymbol{X}^{(t-1)} \mid \boldsymbol{X}^{(t)}, \boldsymbol{z}\right)}{q\left(\boldsymbol{X}^{(t)} \mid \boldsymbol{X}^{(t-1)}\right)} \\
+&amp;~~~~~~ \left.-\log \frac{q_{\boldsymbol{\varphi}}\left(\boldsymbol{z} \mid \boldsymbol{X}^{(0)}\right)}{p(\boldsymbol{z})}\right].
+\end{aligned}\]
+
+<p>The process is parameterized by \(\theta, \varphi\) and the variational lower bound can be written into KL divergencies,</p>
+
+\[\begin{gathered}
+L(\boldsymbol{\theta}, \boldsymbol{\varphi})=\mathbb{E}_q\left[\sum _ { t = 2 } ^ { T } D _ { \mathrm { KL } } \left(q\left(\boldsymbol{X}^{(t-1)} \mid \boldsymbol{X}^{(t)}, \boldsymbol{X}^{(0)}\right) \|\right.\right. \\
+\left.p_{\boldsymbol{\theta}}\left(\boldsymbol{X}^{(t-1)} \mid \boldsymbol{X}^{(t)}, \boldsymbol{z}\right)\right) \\
+-\log p_{\boldsymbol{\theta}}\left(\boldsymbol{X}^{(0)} \mid \boldsymbol{X}^{(1)}, \boldsymbol{z}\right) \\
+\left.+D_{\mathrm{KL}}\left(q_{\boldsymbol{\varphi}}\left(\boldsymbol{z} \mid \boldsymbol{X}^{(0)}\right) \| p(\boldsymbol{z})\right)\right] .
+\end{gathered}\]
+
+<p>This objective function can be then written in the form of points(instead of shapes) as follows,</p>
+
+\[\begin{aligned}
+L(\theta, \varphi) &amp;= \mathbb{E}_q \Big[\sum_{t=2}^T\sum_{i=1}^N D_\mathrm{KL}\left(q(x_i^{(t-1)}\mid x_i^{(t)}, x_i^{(0)})\| p_\theta(x_i^{(t-1)}\mid x_i^{(t)}, z)\right)\\
+&amp;~~~~~~~~ -\sum_{i=1}^N\log p_\theta(x_i^{(0)}\mid x_i^{(1)}, z)+D_\mathrm{KL}(q_\varphi(z\mid \boldsymbol{X}^{(0)})\| p(z))\Big].
+\end{aligned}\]
+
+<p>Another important point about this paper is that it does not assume the prior distribution of the latent variable \(z\) to be standard normal.
+Instead, the algorithm needs to learn the prior distribution for sampling.
+Therefore, both side of \(D_{\mathrm{KL}}\left(q_{\boldsymbol{\varphi}}\left(\boldsymbol{z} \mid \boldsymbol{X}^{(0)}\right) \| p(\boldsymbol{z})\right)\) involves trainable parameters.
+An encoder \(q_{\boldsymbol{\varphi}}\left(\boldsymbol{z} \mid \boldsymbol{X}^{(0)}\right)\) is learned by parameterizing it with \(\boldsymbol{\mu}_{\varphi}\left(\boldsymbol{X}^{(0)}\right), \boldsymbol{\Sigma}_{\boldsymbol{\varphi}}\left(\boldsymbol{X}^{(0)}\right)\).
+An map \(F_\alpha\) that transform samples in standard normal to prior distribution is learned by parameterizing it with a bijection neural network and \(z=F_\alpha(\omega)\).</p>
+
+<figure>
+  <img src="../../../assets/img/diffusion-model/DPM-flowchart.png" style="width:100%" />
+  <figcaption>Fig.4 - The flowchart of training and sampling process of DPM.</figcaption>
+</figure>
+
+<figure>
+  <img src="../../../assets/img/diffusion-model/DPM-algorithm.png" style="width:100%" />
+  <figcaption>Fig.5 - DPM training algorithm.</figcaption>
+</figure>
+
+<h1 id="latent-point-diffusion-modelslion">Latent Point Diffusion Models(LION)</h1>
+<p>The latent diffusion model <a class="citation" href="#rombach2022high">[4]</a> in image synthesis conducted the diffusion process in the latent space.
+The paper <a class="citation" href="#vahdat2022lion">[5]</a>, unlike previously mentioned PVD <a class="citation" href="#luo2021diffusion">[3]</a>, applied the similar spirit to the 3D point clouds.</p>
+
+<h2 id="formulation-1">Formulation</h2>
+<p>The model is consist of a VAE to encode shapes to latent space and diffusion models that map vectors from standard normal distribution to latent space.</p>
+
+<p><strong>Stage 1: VAE</strong></p>
+
+<p>The VAE part, the encoding-decoding process has three steps:</p>
+<ol>
+  <li>Use a PVCNN to encode the whole point clouds into a latent vector (shape latent) \(z_0\in \mathbb{R}^{D_z}\).</li>
+  <li>Concatenate shape latent with each point in the point cloud. Then use a PVCNN to map point clouds to latent “point clouds” \(h_0\in \mathbb{R}^{3+D_h}\) in latent space.</li>
+  <li>Decoding from the concatenation of latent points and shape latent.</li>
+</ol>
+<figure>
+  <img src="../../../assets/img/diffusion-model/lion-stage-1-flowchart.png" class="center" style="width:60%" />
+  <figcaption>Fig.6 - LION training-Stage 1: VAE part.</figcaption>
+</figure>
+
+<p><strong>Stage 2: Diffusion</strong></p>
+
+<p>There are two diffusion processes involved since there are two latent vectors.
+Both diffusion processes start from standard normal distribution and mapped to shape latent vectors and point latent respectively.</p>
+<figure>
+  <img src="../../../assets/img/diffusion-model/lion-stage-2-flowchart.png" class="center" style="width:60%" />
+  <figcaption>Fig.6 - LION training-Stage 1: VAE part.</figcaption>
+</figure>
+
+<p><strong>Sampling process</strong></p>
+
+<p>The sample generation process is consist of three steps:</p>
+<ol>
+  <li>Sample a vector from multivariate standard normal \(z_T\) distribution and reverse diffused into shape latent \(z_0\).</li>
+  <li>Sample a vector from multivariate standard normal \(h_T\) and concatenate shape latent \(z_0\) with each intermediate step \(h_t\) and reversely diffused into point latents.</li>
+</ol>
+
+<h2 id="training-objective-1">Training objective</h2>
+<p>During the training of VAE, LION is trained by maximizing a modified variational lower bound on the data log-likelihood with respect to the encoder and ecoder parameters \(\phi\) and \(\xi\):</p>
+
+\[\begin{aligned}
+\mathcal{L}_{\mathrm{ELBO}}(\boldsymbol{\phi}, \boldsymbol{\xi}) &amp; =\mathbb{E}_{p(\mathbf{x}), q_\phi\left(\mathbf{z}_0 \mid \mathbf{x}\right), q_\phi\left(\mathbf{h}_0 \mid \mathbf{x}, \mathbf{z}_0\right)}\left[\log p_{\boldsymbol{\xi}}\left(\mathbf{x} \mid \mathbf{h}_0, \mathbf{z}_0\right)\right. \\
+&amp; \left.-\lambda_{\mathbf{z}} D_{\mathrm{KL}}\left(q_\phi\left(\mathbf{z}_0 \mid \mathbf{x}\right) \mid p\left(\mathbf{z}_0\right)\right)-\lambda_{\mathbf{h}} D_{\mathrm{KL}}\left(q_\phi\left(\mathbf{h}_0 \mid \mathbf{x}, \mathbf{z}_0\right) \mid p\left(\mathbf{h}_0\right)\right)\right] .
+\end{aligned}\]
+
+<p>The priors \(p(z_0)\) and \(p(h_0)\) are \(\mathcal{N}(0, I)\).
+During the training of diffusion models, the models are trained on embeddings and have VAE model fixed.</p>
+
+<h1 id="3d-ldm">3D-LDM</h1>
+<p>Many previous works have discussed the limit of different methods of representing 3D shapes.
+Voxels are computationally and memory intensive and thus difficult to scale to high resolution;
+point clouds are light-weight and easy to process, but require a lossy post-processing step to obtain surfaces.
+Another form for representing shapes is SDF(signed distance function) <a class="citation" href="#park2019deepsdf">[6]</a>, it can be used to represent water-tight closed surface.
+In <a class="citation" href="#nam20223d">[7]</a>, the paper proposed using coded shape DeepSDF and use diffusion model to generate code for shapes.</p>
+
+<h2 id="formulation-2">Formulation</h2>
+
+<p><strong>Coded Shape SDF</strong>:
+This is a function \(f_\theta(p, z)\) that maps a point \(p\) and a latent representation of shapes \(z\) to a signed distance(positive distance outside and negative distance inside).
+A set of shapes \(\mathcal{S}\) can be represented with \(f_\theta\) given a latent representation \(z_i\):</p>
+
+\[\begin{equation}
+\mathcal{S}_i:=\{\mathbf{b}\mid f_\theta(\mathbf{p}, z_i)=0\}.
+\end{equation}\]
+
+<p><strong>Training setup</strong>:
+DeepSDF <a class="citation" href="#park2019deepsdf">[6]</a> has shown that \(f_\theta\) can be trained efficiently in an encoder-less setup, called an auto-decoder, where each shape \(S_i\) is explicitly associated with a latent vector \(z_i\).
+These latent vectors are randomly assigned at first and learned during training process.
+Therefore, the algorithm is consist of two parts:</p>
+<ol>
+  <li>Auto-decoder for neural implicit 3D shapes.</li>
+  <li>Latent diffusion model for generating latent vector.</li>
+</ol>
+
+<p>For <strong>the first part</strong>, the paper parameterizes the SDF with \(\theta\) and \(Z=\{z_i\}\) represents latent vectors.
+The objective function is following regularized reconstruction error:</p>
+
+\[\begin{gathered}
+\underset{\theta, Z}{\arg \min } \sum_{i=1}^N \mathcal{L}_{\text {recon }}\left(\boldsymbol{z}_i, \mathrm{SDF}_i\right)+\frac{1}{\lambda^2} \mathcal{L}_{\text {reg }}\left(\boldsymbol{z}_i\right) \text {, with } \\
+\mathcal{L}_{\text {recon }}:=\mathbb{E}_{\mathbf{p} \sim \mathcal{P}}\left[\left\|f_\theta\left(\mathbf{p}, \boldsymbol{z}_i\right)-\operatorname{SDF}_i(\mathbf{p})\right\|_1\right] \text {, and } \\
+\mathcal{L}_{\text {reg }}:=\left\|\boldsymbol{z}_i\right\|_2^2 .
+\end{gathered}\]
+
+<p>Remarks:</p>
+<ol>
+  <li>The latent vectors \(z_i\) was unknown before training and is randomly initialized.
+The training process learns both \(\theta\) and \(Z\) at the same time.</li>
+  <li>The training data is sampled through algorithm discussed in <a class="citation" href="#park2019deepsdf">[6]</a> section 5.
+As implemented in <a class="citation" href="#park2019deepsdf">[6]</a>, the data points are sampled within a certain box \([-\delta, \delta]\).</li>
+</ol>
+
+<p>For <strong>the second part</strong>, the paper used the latent vectors \(\{z_i\}\) generated during the training process in the first part as training data.
+The diffusion model follows the DDPM framwork and parameterized the model with \(\epsilon_\phi(z^t, t)\).
+The paper claimed that they are following <d-cite key="ho2020denoising"></d-cite> that it is more stably and efficiently to train the network to predict the total noise \(z^t-z^0\).
+(I checked the DDPM paper and did not find related description.
+Personally, I think it is counter-intuitive to predict total noise and use it as step-wise noise.)
+In this framework, the training objective for this phase is:</p>
+
+\[\begin{array}{r}
+\underset{\phi}{\arg \min } \sum_{i=1}^N \mathbb{E}\left[\left\|\boldsymbol{\epsilon}_\phi\left(\boldsymbol{z}^t, t\right)-\left(\boldsymbol{z}^t-\boldsymbol{z}_i\right)\right\|_2^2\right], \\
+\text { with } t \sim \mathcal{U}(1, T) \text { and } \boldsymbol{z}^t \sim q\left(\boldsymbol{z}^t \mid \boldsymbol{z}_i\right) .
+\end{array}\]
+
+<figure>
+  <img src="../../../assets/img/diffusion-model/3D-LDM-chartflow.png" class="center" style="height:90%" />
+  <figcaption>Fig.7 - 3D-LDM training for unconditional generation. Image source <a class="citation" href="#nam20223d">[7]</a> </figcaption>
+</figure>
+
+<p><strong>Sampling process</strong></p>
+
+<p>The <strong>unconditional sampling</strong> step is exactly the same as DDPM.
+The reverse process is approximated by \(p_\phi(z^{t-1}\mid z^t)\) and is parameterized as a Gaussian distribution, where the mean \(\mu_\phi\) is defined as</p>
+
+\[\mu_\phi\left(\boldsymbol{z}^t, t\right)=\frac{1}{\sqrt{\alpha_t}}\left(\boldsymbol{z}^t-\frac{1-\alpha_t}{\sqrt{1-\bar{\alpha}_t}} \epsilon_\phi\left(\boldsymbol{z}^t, t\right)\right).\]
+
+<figure>
+  <img src="../../../assets/img/diffusion-model/3D-LDM-conditional-generation.png" class="center" style="height:90%" />
+  <figcaption>Fig.8 - 3D-LDM flowchart for conditional generation using CLIP framework. Image source <a class="citation" href="#nam20223d">[7]</a> </figcaption>
+</figure>
+
+<p>In the cases of <strong>conditional sampling</strong>, CLIP model <a class="citation" href="#radford2021learning">[8]</a> is used to generate embedding for conditional information such as text and image.
+Then, concatenate latent vector with CLIP embedding and the reverse process mean \(\mu_\phi\) is modified into</p>
+
+\[\begin{equation}
+\mu_\phi\left(\boldsymbol{z}^t, \boldsymbol{c}, t\right)=\frac{1}{\sqrt{\alpha_t}}\left(\boldsymbol{z}^t-\frac{1-\alpha_t}{\sqrt{1-\bar{\alpha}_t}} \epsilon_\phi\left(\boldsymbol{z}^t, \boldsymbol{c}, t\right)\right).
+\end{equation}\]
+
+<h1 id="sdfusion">SDFusion</h1>
+<p>In 3D-LDM discussed above, the model architecture is an auto-decoder DeepSDF that learns the embedding during training.
+In <d-cite key="cheng2023sdfusion"></d-cite>, the author proposed an encoder-decoder model and, instead of using DeepSDF, used Truncated Signed Distance Field(T-SDF) to represent the shape.
+T-SDF is a simplified version of SDF and it limit or “truncate” the range of distances that we care about.
+It models a 3D shape with a volumetric tensor \(X\in\mathbb{R}^{H\times W\times L}\).
+The algorithm in this paper is quite similar to previous ones and applied a latent diffusion model framework.</p>
+
+<h2 id="formulation-3">Formulation</h2>
+<p>The algorithm is consist of an auto-encoder for compression T-SDF data and a diffusion model in latent space.</p>
+
+<p><strong>3D shape Compression of SDF</strong>:
+The author leveraged a 3D variation of VA-VAE <d-cite key="oord2017neural"></d-cite> and, given an input shape in the form of T-SDF \(X\in\mathbb{R}^{D\times D\times D}\), we have
+\(\begin{equation}
+z=E_\phi(X)\text{, and } X'=D_\tau(\mathrm{VQ}(z)).
+\end{equation}\)
+In the above formulation, \(E_\phi \text{ and } D_\tau\) represent encoder and decoder between 3D space and latent space.
+VQ is the quantization step which maps the latent variable \(z\) to the nearestt element in the codebook \(\mathcal{Z}\).
+\(E_\phi, D_\tau,\text{ and } \mathcal{Z}\) are jointly trained.</p>
+
+<p><strong>Latent diffusion model for SDF</strong>:
+This part is exactly the same as DDPM.
+The paper use a time-conditional 3D UNet to approximate \(\epsilon_\theta\) and adopt the simplified objective function</p>
+
+\[L_{\text {simple }}(\theta):=\mathbb{E}_{\mathbf{z}, \epsilon \sim N(0,1), t}\left[\left\|\epsilon-\epsilon_\theta\left(\mathbf{z}_t, t\right)\right\|^2\right].\]
+
+<figure>
+  <img src="../../../assets/img/diffusion-model/SDFusion-flowchart.png" class="center" style="height:90%" />
+  <figcaption>Fig.9 - SDFusion flowchart. Image source <a class="citation" href="#cheng2023sdfusion">[9]</a> </figcaption>
+</figure>
+
+<h1 id="references">References</h1>
+<ol class="bibliography"><li><span id="zhou20213d">[1]L. Zhou, Y. Du, and J. Wu, “3d shape generation and completion through point-voxel diffusion,” in <i>Proceedings of the IEEE/CVF International Conference on Computer Vision</i>, 2021, pp. 5826–5835.</span></li>
+<li><span id="liu2019point">[2]Z. Liu, H. Tang, Y. Lin, and S. Han, “Point-voxel cnn for efficient 3d deep learning,” <i>Advances in Neural Information Processing Systems</i>, vol. 32, 2019.</span></li>
+<li><span id="luo2021diffusion">[3]S. Luo and W. Hu, “Diffusion probabilistic models for 3d point cloud generation,” in <i>Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition</i>, 2021, pp. 2837–2845.</span></li>
+<li><span id="rombach2022high">[4]R. Rombach, A. Blattmann, D. Lorenz, P. Esser, and B. Ommer, “High-resolution image synthesis with latent diffusion models,” in <i>Proceedings of the IEEE/CVF conference on computer vision and pattern recognition</i>, 2022, pp. 10684–10695.</span></li>
+<li><span id="vahdat2022lion">[5]A. Vahdat <i>et al.</i>, “LION: Latent Point Diffusion Models for 3D Shape Generation,” <i>Advances in Neural Information Processing Systems</i>, vol. 35, pp. 10021–10039, 2022.</span></li>
+<li><span id="park2019deepsdf">[6]J. J. Park, P. Florence, J. Straub, R. Newcombe, and S. Lovegrove, “Deepsdf: Learning continuous signed distance functions for shape representation,” in <i>Proceedings of the IEEE/CVF conference on computer vision and pattern recognition</i>, 2019, pp. 165–174.</span></li>
+<li><span id="nam20223d">[7]G. Nam, M. Khlifi, A. Rodriguez, A. Tono, L. Zhou, and P. Guerrero, “3d-ldm: Neural implicit 3d shape generation with latent diffusion models,” <i>arXiv preprint arXiv:2212.00842</i>, 2022.</span></li>
+<li><span id="radford2021learning">[8]A. Radford <i>et al.</i>, “Learning transferable visual models from natural language supervision,” in <i>International conference on machine learning</i>, 2021, pp. 8748–8763.</span></li>
+<li><span id="cheng2023sdfusion">[9]Y.-C. Cheng, H.-Y. Lee, S. Tulyakov, A. G. Schwing, and L.-Y. Gui, “Sdfusion: Multimodal 3d shape completion, reconstruction, and generation,” in <i>Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition</i>, 2023, pp. 4456–4465.</span></li></ol>
+
+
+  
+  <p class="tags">Tags:
+    
+      <a href="/tags.html#ml">#ML</a>, 
+    
+      <a href="/tags.html#cv">#CV</a>, 
+    
+      <a href="/tags.html#diffusion-model">#Diffusion Model</a>
+    
+  </p>
+  
+
+  <!-- Comments powered by Giscus.
+  Setup steps:
+  1) Create/choose a repo to store discussions (e.g. USERNAME/your-site-comments).
+  2) Enable "Discussions" in that repo (Settings -> General -> Features).
+  3) Install the Giscus GitHub App and allow it to access that repo.
+  4) Visit https://giscus.app to generate values for repo, repo-id, category, category-id, etc.
+  5) Fill the 'giscus' block in _config.yml accordingly.
+-->
+
+
+  <!-- Giscus not configured yet. Set 'giscus' keys in _config.yml to enable comments. -->
+
+
+</article>
+
+  </main>
+  <footer class="site-footer">
+    <div class="container">
+      <small>&copy; 2025 Xiaozhi(Alan) Zhu</small>
+    </div>
+  </footer>
+</body>
+</html>

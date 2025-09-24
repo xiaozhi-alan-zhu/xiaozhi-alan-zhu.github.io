@@ -1,0 +1,795 @@
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="4.4.1">Jekyll</generator><link href="http://localhost:4000/feed.xml" rel="self" type="application/atom+xml" /><link href="http://localhost:4000/" rel="alternate" type="text/html" /><updated>2025-09-14T11:13:10-07:00</updated><id>http://localhost:4000/feed.xml</id><title type="html">Xiaozhi Zhu’s Website</title><subtitle>Applied mathematician, AI researcher</subtitle><author><name>Xiaozhi(Alan) Zhu</name><email>xiaozhizhu1994@gmail.com</email></author><entry><title type="html">Diffusion Models for 3D Shape Generation</title><link href="http://localhost:4000/2025/09/03/3d-diffusion.html" rel="alternate" type="text/html" title="Diffusion Models for 3D Shape Generation" /><published>2025-09-03T00:00:00-07:00</published><updated>2025-09-03T00:00:00-07:00</updated><id>http://localhost:4000/2025/09/03/3d-diffusion</id><content type="html" xml:base="http://localhost:4000/2025/09/03/3d-diffusion.html"><![CDATA[<h1 id="introduction">Introduction</h1>
+<p>Diffusion model has proven to be a very powerful generative model and achieved huge success in image synthesis.
+One of the most widely known application is the synthesis of images condition on text or image input.
+Models like … take one step further to generate short videos based on instruction.</p>
+
+<p>Meanwhile extending this power model to 3D is far from trivial.
+It can be represented in point, voxel, surface and etc.
+Unlike image data, all these forms are less structured and should be invariant w.r.t. permutation.
+Each of the above data structures requires different techniques to deal with(i.e. PointNet for point cloud, graph neural network for surface data etc).</p>
+
+<h1 id="point-voxel-diffusion">Point-Voxel diffusion</h1>
+<p>Direct application of diffusion models on either voxel and point representation results in poor generation quality.
+The paper <a class="citation" href="#zhou20213d">[1]</a> proposed Point-Voxel diffusion(PVD) that utilize both point-wise and voxel-wise information to guide diffusion.
+The framework is almost exactly the same as DDPM except for the choice of backbone network.
+Instead of using U-Net to denoise, the paper applied point-voxel CNN <a class="citation" href="#liu2019point">[2]</a> to parameterize their model.
+Point-voxel CNN is capable of extract features from point cloud data and requires much less computational resource than previous methods(i.e. PointNet).</p>
+
+<h2 id="quick-review-of-ddpm">Quick review of DDPM</h2>
+<p>Here, we quickly review the training and sampling process with diffusion model.
+The DDPM parameterize the model learn the “noise” \(\epsilon_\theta(x_t, t)\) and the paper used a point-voxel CNN to represent \(\epsilon_\theta(x_t, t)\).
+The loss function is</p>
+
+\[\begin{align}
+\min_{x_t, \epsilon\sim\mathcal{N}(0, I)}&amp;\|\epsilon-\epsilon_\theta(x_t, t)\|^2_2\\
+\text{where } x_t =&amp; \sqrt{\bar{\alpha}_t}x_0 + \sqrt{1-\bar{\alpha}_t}\epsilon.
+\end{align}\]
+
+<p>WIth a trained model \(\epsilon_\theta(x_t, t)\), the sampling process is
+\(\begin{equation}
+\mathbf{x}_{t-1}=\frac{1}{\sqrt{\alpha_t}}\left(\mathbf{x}_t-\frac{1-\alpha_t}{\sqrt{1-\tilde{\alpha}_t}} \boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t\right)\right)+\sqrt{\beta_t} \mathbf{z},
+\end{equation}\)
+where \(z\sim \mathcal{N}(o, I)\).</p>
+
+<p>In the context of this paper, $x_0\in\mathbb{R}^{N\times 3}$ is point cloud data.</p>
+
+<h2 id="experiment">Experiment</h2>
+<p>In the experiment part, the paper tested the algorithm on tasks of shape generation and shape completeion.
+It examined metrics such as <a href="https://pdal.io/en/latest/apps/chamfer.html">Chamfer Distance(CD)</a>, <a href="https://en.wikipedia.org/wiki/Earth_mover%27s_distance">Earth Mover’s Distance(EMD)</a> and etc.</p>
+
+<figure>
+  <img src="../../../assets/img/diffusion-model/PVD-generation-samples.png" style="width:100%" />
+  <figcaption>Fig.1 - Comparison of samples generated from different methods. We can observe that Voxel based diffusion is not enough to generate high quality samples.</figcaption>
+</figure>
+
+<h1 id="diffusion-probabilistic-models-for-3d-point-cloud-generationdpm">Diffusion Probabilistic Models for 3D Point Cloud Generation(DPM)</h1>
+
+<p>The paper <a class="citation" href="#luo2021diffusion">[3]</a> proposed a framework that introduced latent encoding to the DDPM.
+The diffusion process and reverse process still happens in physical space, not in latent space.
+The latent variable is used as a guidence during the reverse process.</p>
+
+<p>For clarity of discussion, we denote \(\boldsymbol{X}=\{x_i\}_{i\in[N]}\) to be a 3D shape in the form of point cloud and \(x_i\in \mathbb{R}^3\) for \(i\in [N]\) represents each point in the point cloud.
+Let \(\tilde{p}(\boldsymbol{X})\) be the distribution of shapes \(\boldsymbol{X}\) and \(p(x)\) be the distribution of points in arbitrary shapes.</p>
+
+<h2 id="formulation">Formulation</h2>
+<p>The paper introduced a latent variable \(\boldsymbol{z}\sim q_\varphi(\boldsymbol{z}\mid\boldsymbol{X}^{(0)})=\mathcal{N}\left(z\mid\mu_\varphi(\boldsymbol{X}^{(0)}, \Sigma_\varphi(\boldsymbol{X}^{(0)}))\right)\).
+However, instead of apply diffusion process in latent space as in <a class="citation" href="#rombach2022high">[4]</a>, it is used only as a guidence during the diffusion \(\boldsymbol{X}^{(t-1)}\sim p_\theta(\cdot\mid\boldsymbol{X}^{(t)}, \boldsymbol{z})\).
+More importantly, unlike PVD or image-based diffusion model, the diffusion process is conducted pointwisely.
+To be more specific, each point in a point cloud is diffused separately \(x_i^{(t-1)}\sim p_\theta\left(\cdot\mid x_i^{(t)}, z\right)\).
+The paper further concluded that points in a given point cloud is conditionally independent(given the point cloud/shape) and, mathematically, can be formulated as
+\(\begin{equation}
+\tilde{p}_\theta(\boldsymbol{X}\mid\boldsymbol{z})=\prod_{i=1}^N p_\theta(x_i\mid\boldsymbol{z}).
+\end{equation}\)</p>
+
+<p>This is also shown in the following graphical model.</p>
+<figure>
+  <img src="../../../assets/img/diffusion-model/DPM-graphical-model.png" style="width:100%" />
+  <figcaption>Fig.2 - The graphical model of the Diffusion Probabilistic Model. The latent embedding is used as a stand alone information. The start point of the diffusion is still Gaussian distributed points in 3D physical space.</figcaption>
+</figure>
+
+<p>In comparison, the PVD update each reverse diffusion step through updating all points simutaniously and can be viewed as following graphical model.</p>
+<figure>
+  <img src="../../../assets/img/diffusion-model/PVD-graphical-model.png" style="width:30%" />
+  <figcaption>Fig.3 - The graphical model of the PVD. In PVD's algorithm, all points in point cloud is input information for updating a diffusion step.</figcaption>
+</figure>
+
+<p>The forward process is the same as DDPM or PVD which is simply adding noise to the points.
+The reverse process is formulated as</p>
+
+\[\begin{gathered}
+p_{\boldsymbol{\theta}}\left(\boldsymbol{x}^{(0: T)} \mid \boldsymbol{z}\right)=p\left(\boldsymbol{x}^{(T)}\right) \prod_{t=1}^T p_{\boldsymbol{\theta}}\left(\boldsymbol{x}^{(t-1)} \mid \boldsymbol{x}^{(t)}, \boldsymbol{z}\right), \\
+p_{\boldsymbol{\theta}}\left(\boldsymbol{x}^{(t-1)} \mid \boldsymbol{x}^{(t)}, \boldsymbol{z}\right)=\mathcal{N}\left(\boldsymbol{x}^{(t-1)} \mid \boldsymbol{\mu}_{\boldsymbol{\theta}}\left(\boldsymbol{x}^{(t)}, t, \boldsymbol{z}\right), \beta_t \boldsymbol{I}\right)。
+\end{gathered}\]
+
+<p>In this setup, \(p_\theta(x^{(0)})\) represent an image’s probability under the learned model \(p_\theta\) and, in below, we will use \(q_\varphi(z\mid \boldsymbol{X}^{(0)})\) as the encoder.
+For simplicity of discussion, we will use \(p_\theta\) to replace \(\tilde{p}_\theta\).</p>
+
+<h2 id="training-objective">Training objective</h2>
+<p>Similar to DDPM, the log-likelihood of reverse process \(p_\theta(x^{(0)})\) can be lower bounded by</p>
+
+\[\begin{aligned}
+\mathbb{E}\left[\log p_{\boldsymbol{\theta}}\left(\boldsymbol{X}^{(0)}\right)\right] &amp;\geq \mathbb{E}_q  {\left[\log \frac{p_{\boldsymbol{\theta}}\left(\boldsymbol{X}^{(0: T)}, \boldsymbol{z}\right)}{q\left(\boldsymbol{X}^{(1: T)}, \boldsymbol{z} \mid \boldsymbol{X}^{(0)}\right)}\right] } \\
+&amp;=\mathbb{E}_q\left[\log p\left(\boldsymbol{X}^{(T)}\right)\right.  \\
+&amp;~~~~~~ +\sum_{t=1}^T \log \frac{p_{\boldsymbol{\theta}}\left(\boldsymbol{X}^{(t-1)} \mid \boldsymbol{X}^{(t)}, \boldsymbol{z}\right)}{q\left(\boldsymbol{X}^{(t)} \mid \boldsymbol{X}^{(t-1)}\right)} \\
+&amp;~~~~~~ \left.-\log \frac{q_{\boldsymbol{\varphi}}\left(\boldsymbol{z} \mid \boldsymbol{X}^{(0)}\right)}{p(\boldsymbol{z})}\right].
+\end{aligned}\]
+
+<p>The process is parameterized by \(\theta, \varphi\) and the variational lower bound can be written into KL divergencies,</p>
+
+\[\begin{gathered}
+L(\boldsymbol{\theta}, \boldsymbol{\varphi})=\mathbb{E}_q\left[\sum _ { t = 2 } ^ { T } D _ { \mathrm { KL } } \left(q\left(\boldsymbol{X}^{(t-1)} \mid \boldsymbol{X}^{(t)}, \boldsymbol{X}^{(0)}\right) \|\right.\right. \\
+\left.p_{\boldsymbol{\theta}}\left(\boldsymbol{X}^{(t-1)} \mid \boldsymbol{X}^{(t)}, \boldsymbol{z}\right)\right) \\
+-\log p_{\boldsymbol{\theta}}\left(\boldsymbol{X}^{(0)} \mid \boldsymbol{X}^{(1)}, \boldsymbol{z}\right) \\
+\left.+D_{\mathrm{KL}}\left(q_{\boldsymbol{\varphi}}\left(\boldsymbol{z} \mid \boldsymbol{X}^{(0)}\right) \| p(\boldsymbol{z})\right)\right] .
+\end{gathered}\]
+
+<p>This objective function can be then written in the form of points(instead of shapes) as follows,</p>
+
+\[\begin{aligned}
+L(\theta, \varphi) &amp;= \mathbb{E}_q \Big[\sum_{t=2}^T\sum_{i=1}^N D_\mathrm{KL}\left(q(x_i^{(t-1)}\mid x_i^{(t)}, x_i^{(0)})\| p_\theta(x_i^{(t-1)}\mid x_i^{(t)}, z)\right)\\
+&amp;~~~~~~~~ -\sum_{i=1}^N\log p_\theta(x_i^{(0)}\mid x_i^{(1)}, z)+D_\mathrm{KL}(q_\varphi(z\mid \boldsymbol{X}^{(0)})\| p(z))\Big].
+\end{aligned}\]
+
+<p>Another important point about this paper is that it does not assume the prior distribution of the latent variable \(z\) to be standard normal.
+Instead, the algorithm needs to learn the prior distribution for sampling.
+Therefore, both side of \(D_{\mathrm{KL}}\left(q_{\boldsymbol{\varphi}}\left(\boldsymbol{z} \mid \boldsymbol{X}^{(0)}\right) \| p(\boldsymbol{z})\right)\) involves trainable parameters.
+An encoder \(q_{\boldsymbol{\varphi}}\left(\boldsymbol{z} \mid \boldsymbol{X}^{(0)}\right)\) is learned by parameterizing it with \(\boldsymbol{\mu}_{\varphi}\left(\boldsymbol{X}^{(0)}\right), \boldsymbol{\Sigma}_{\boldsymbol{\varphi}}\left(\boldsymbol{X}^{(0)}\right)\).
+An map \(F_\alpha\) that transform samples in standard normal to prior distribution is learned by parameterizing it with a bijection neural network and \(z=F_\alpha(\omega)\).</p>
+
+<figure>
+  <img src="../../../assets/img/diffusion-model/DPM-flowchart.png" style="width:100%" />
+  <figcaption>Fig.4 - The flowchart of training and sampling process of DPM.</figcaption>
+</figure>
+
+<figure>
+  <img src="../../../assets/img/diffusion-model/DPM-algorithm.png" style="width:100%" />
+  <figcaption>Fig.5 - DPM training algorithm.</figcaption>
+</figure>
+
+<h1 id="latent-point-diffusion-modelslion">Latent Point Diffusion Models(LION)</h1>
+<p>The latent diffusion model <a class="citation" href="#rombach2022high">[4]</a> in image synthesis conducted the diffusion process in the latent space.
+The paper <a class="citation" href="#vahdat2022lion">[5]</a>, unlike previously mentioned PVD <a class="citation" href="#luo2021diffusion">[3]</a>, applied the similar spirit to the 3D point clouds.</p>
+
+<h2 id="formulation-1">Formulation</h2>
+<p>The model is consist of a VAE to encode shapes to latent space and diffusion models that map vectors from standard normal distribution to latent space.</p>
+
+<p><strong>Stage 1: VAE</strong></p>
+
+<p>The VAE part, the encoding-decoding process has three steps:</p>
+<ol>
+  <li>Use a PVCNN to encode the whole point clouds into a latent vector (shape latent) \(z_0\in \mathbb{R}^{D_z}\).</li>
+  <li>Concatenate shape latent with each point in the point cloud. Then use a PVCNN to map point clouds to latent “point clouds” \(h_0\in \mathbb{R}^{3+D_h}\) in latent space.</li>
+  <li>Decoding from the concatenation of latent points and shape latent.</li>
+</ol>
+<figure>
+  <img src="../../../assets/img/diffusion-model/lion-stage-1-flowchart.png" class="center" style="width:60%" />
+  <figcaption>Fig.6 - LION training-Stage 1: VAE part.</figcaption>
+</figure>
+
+<p><strong>Stage 2: Diffusion</strong></p>
+
+<p>There are two diffusion processes involved since there are two latent vectors.
+Both diffusion processes start from standard normal distribution and mapped to shape latent vectors and point latent respectively.</p>
+<figure>
+  <img src="../../../assets/img/diffusion-model/lion-stage-2-flowchart.png" class="center" style="width:60%" />
+  <figcaption>Fig.6 - LION training-Stage 1: VAE part.</figcaption>
+</figure>
+
+<p><strong>Sampling process</strong></p>
+
+<p>The sample generation process is consist of three steps:</p>
+<ol>
+  <li>Sample a vector from multivariate standard normal \(z_T\) distribution and reverse diffused into shape latent \(z_0\).</li>
+  <li>Sample a vector from multivariate standard normal \(h_T\) and concatenate shape latent \(z_0\) with each intermediate step \(h_t\) and reversely diffused into point latents.</li>
+</ol>
+
+<h2 id="training-objective-1">Training objective</h2>
+<p>During the training of VAE, LION is trained by maximizing a modified variational lower bound on the data log-likelihood with respect to the encoder and ecoder parameters \(\phi\) and \(\xi\):</p>
+
+\[\begin{aligned}
+\mathcal{L}_{\mathrm{ELBO}}(\boldsymbol{\phi}, \boldsymbol{\xi}) &amp; =\mathbb{E}_{p(\mathbf{x}), q_\phi\left(\mathbf{z}_0 \mid \mathbf{x}\right), q_\phi\left(\mathbf{h}_0 \mid \mathbf{x}, \mathbf{z}_0\right)}\left[\log p_{\boldsymbol{\xi}}\left(\mathbf{x} \mid \mathbf{h}_0, \mathbf{z}_0\right)\right. \\
+&amp; \left.-\lambda_{\mathbf{z}} D_{\mathrm{KL}}\left(q_\phi\left(\mathbf{z}_0 \mid \mathbf{x}\right) \mid p\left(\mathbf{z}_0\right)\right)-\lambda_{\mathbf{h}} D_{\mathrm{KL}}\left(q_\phi\left(\mathbf{h}_0 \mid \mathbf{x}, \mathbf{z}_0\right) \mid p\left(\mathbf{h}_0\right)\right)\right] .
+\end{aligned}\]
+
+<p>The priors \(p(z_0)\) and \(p(h_0)\) are \(\mathcal{N}(0, I)\).
+During the training of diffusion models, the models are trained on embeddings and have VAE model fixed.</p>
+
+<h1 id="3d-ldm">3D-LDM</h1>
+<p>Many previous works have discussed the limit of different methods of representing 3D shapes.
+Voxels are computationally and memory intensive and thus difficult to scale to high resolution;
+point clouds are light-weight and easy to process, but require a lossy post-processing step to obtain surfaces.
+Another form for representing shapes is SDF(signed distance function) <a class="citation" href="#park2019deepsdf">[6]</a>, it can be used to represent water-tight closed surface.
+In <a class="citation" href="#nam20223d">[7]</a>, the paper proposed using coded shape DeepSDF and use diffusion model to generate code for shapes.</p>
+
+<h2 id="formulation-2">Formulation</h2>
+
+<p><strong>Coded Shape SDF</strong>:
+This is a function \(f_\theta(p, z)\) that maps a point \(p\) and a latent representation of shapes \(z\) to a signed distance(positive distance outside and negative distance inside).
+A set of shapes \(\mathcal{S}\) can be represented with \(f_\theta\) given a latent representation \(z_i\):</p>
+
+\[\begin{equation}
+\mathcal{S}_i:=\{\mathbf{b}\mid f_\theta(\mathbf{p}, z_i)=0\}.
+\end{equation}\]
+
+<p><strong>Training setup</strong>:
+DeepSDF <a class="citation" href="#park2019deepsdf">[6]</a> has shown that \(f_\theta\) can be trained efficiently in an encoder-less setup, called an auto-decoder, where each shape \(S_i\) is explicitly associated with a latent vector \(z_i\).
+These latent vectors are randomly assigned at first and learned during training process.
+Therefore, the algorithm is consist of two parts:</p>
+<ol>
+  <li>Auto-decoder for neural implicit 3D shapes.</li>
+  <li>Latent diffusion model for generating latent vector.</li>
+</ol>
+
+<p>For <strong>the first part</strong>, the paper parameterizes the SDF with \(\theta\) and \(Z=\{z_i\}\) represents latent vectors.
+The objective function is following regularized reconstruction error:</p>
+
+\[\begin{gathered}
+\underset{\theta, Z}{\arg \min } \sum_{i=1}^N \mathcal{L}_{\text {recon }}\left(\boldsymbol{z}_i, \mathrm{SDF}_i\right)+\frac{1}{\lambda^2} \mathcal{L}_{\text {reg }}\left(\boldsymbol{z}_i\right) \text {, with } \\
+\mathcal{L}_{\text {recon }}:=\mathbb{E}_{\mathbf{p} \sim \mathcal{P}}\left[\left\|f_\theta\left(\mathbf{p}, \boldsymbol{z}_i\right)-\operatorname{SDF}_i(\mathbf{p})\right\|_1\right] \text {, and } \\
+\mathcal{L}_{\text {reg }}:=\left\|\boldsymbol{z}_i\right\|_2^2 .
+\end{gathered}\]
+
+<p>Remarks:</p>
+<ol>
+  <li>The latent vectors \(z_i\) was unknown before training and is randomly initialized.
+The training process learns both \(\theta\) and \(Z\) at the same time.</li>
+  <li>The training data is sampled through algorithm discussed in <a class="citation" href="#park2019deepsdf">[6]</a> section 5.
+As implemented in <a class="citation" href="#park2019deepsdf">[6]</a>, the data points are sampled within a certain box \([-\delta, \delta]\).</li>
+</ol>
+
+<p>For <strong>the second part</strong>, the paper used the latent vectors \(\{z_i\}\) generated during the training process in the first part as training data.
+The diffusion model follows the DDPM framwork and parameterized the model with \(\epsilon_\phi(z^t, t)\).
+The paper claimed that they are following <d-cite key="ho2020denoising"></d-cite> that it is more stably and efficiently to train the network to predict the total noise \(z^t-z^0\).
+(I checked the DDPM paper and did not find related description.
+Personally, I think it is counter-intuitive to predict total noise and use it as step-wise noise.)
+In this framework, the training objective for this phase is:</p>
+
+\[\begin{array}{r}
+\underset{\phi}{\arg \min } \sum_{i=1}^N \mathbb{E}\left[\left\|\boldsymbol{\epsilon}_\phi\left(\boldsymbol{z}^t, t\right)-\left(\boldsymbol{z}^t-\boldsymbol{z}_i\right)\right\|_2^2\right], \\
+\text { with } t \sim \mathcal{U}(1, T) \text { and } \boldsymbol{z}^t \sim q\left(\boldsymbol{z}^t \mid \boldsymbol{z}_i\right) .
+\end{array}\]
+
+<figure>
+  <img src="../../../assets/img/diffusion-model/3D-LDM-chartflow.png" class="center" style="height:90%" />
+  <figcaption>Fig.7 - 3D-LDM training for unconditional generation. Image source <a class="citation" href="#nam20223d">[7]</a> </figcaption>
+</figure>
+
+<p><strong>Sampling process</strong></p>
+
+<p>The <strong>unconditional sampling</strong> step is exactly the same as DDPM.
+The reverse process is approximated by \(p_\phi(z^{t-1}\mid z^t)\) and is parameterized as a Gaussian distribution, where the mean \(\mu_\phi\) is defined as</p>
+
+\[\mu_\phi\left(\boldsymbol{z}^t, t\right)=\frac{1}{\sqrt{\alpha_t}}\left(\boldsymbol{z}^t-\frac{1-\alpha_t}{\sqrt{1-\bar{\alpha}_t}} \epsilon_\phi\left(\boldsymbol{z}^t, t\right)\right).\]
+
+<figure>
+  <img src="../../../assets/img/diffusion-model/3D-LDM-conditional-generation.png" class="center" style="height:90%" />
+  <figcaption>Fig.8 - 3D-LDM flowchart for conditional generation using CLIP framework. Image source <a class="citation" href="#nam20223d">[7]</a> </figcaption>
+</figure>
+
+<p>In the cases of <strong>conditional sampling</strong>, CLIP model <a class="citation" href="#radford2021learning">[8]</a> is used to generate embedding for conditional information such as text and image.
+Then, concatenate latent vector with CLIP embedding and the reverse process mean \(\mu_\phi\) is modified into</p>
+
+\[\begin{equation}
+\mu_\phi\left(\boldsymbol{z}^t, \boldsymbol{c}, t\right)=\frac{1}{\sqrt{\alpha_t}}\left(\boldsymbol{z}^t-\frac{1-\alpha_t}{\sqrt{1-\bar{\alpha}_t}} \epsilon_\phi\left(\boldsymbol{z}^t, \boldsymbol{c}, t\right)\right).
+\end{equation}\]
+
+<h1 id="sdfusion">SDFusion</h1>
+<p>In 3D-LDM discussed above, the model architecture is an auto-decoder DeepSDF that learns the embedding during training.
+In <d-cite key="cheng2023sdfusion"></d-cite>, the author proposed an encoder-decoder model and, instead of using DeepSDF, used Truncated Signed Distance Field(T-SDF) to represent the shape.
+T-SDF is a simplified version of SDF and it limit or “truncate” the range of distances that we care about.
+It models a 3D shape with a volumetric tensor \(X\in\mathbb{R}^{H\times W\times L}\).
+The algorithm in this paper is quite similar to previous ones and applied a latent diffusion model framework.</p>
+
+<h2 id="formulation-3">Formulation</h2>
+<p>The algorithm is consist of an auto-encoder for compression T-SDF data and a diffusion model in latent space.</p>
+
+<p><strong>3D shape Compression of SDF</strong>:
+The author leveraged a 3D variation of VA-VAE <d-cite key="oord2017neural"></d-cite> and, given an input shape in the form of T-SDF \(X\in\mathbb{R}^{D\times D\times D}\), we have
+\(\begin{equation}
+z=E_\phi(X)\text{, and } X'=D_\tau(\mathrm{VQ}(z)).
+\end{equation}\)
+In the above formulation, \(E_\phi \text{ and } D_\tau\) represent encoder and decoder between 3D space and latent space.
+VQ is the quantization step which maps the latent variable \(z\) to the nearestt element in the codebook \(\mathcal{Z}\).
+\(E_\phi, D_\tau,\text{ and } \mathcal{Z}\) are jointly trained.</p>
+
+<p><strong>Latent diffusion model for SDF</strong>:
+This part is exactly the same as DDPM.
+The paper use a time-conditional 3D UNet to approximate \(\epsilon_\theta\) and adopt the simplified objective function</p>
+
+\[L_{\text {simple }}(\theta):=\mathbb{E}_{\mathbf{z}, \epsilon \sim N(0,1), t}\left[\left\|\epsilon-\epsilon_\theta\left(\mathbf{z}_t, t\right)\right\|^2\right].\]
+
+<figure>
+  <img src="../../../assets/img/diffusion-model/SDFusion-flowchart.png" class="center" style="height:90%" />
+  <figcaption>Fig.9 - SDFusion flowchart. Image source <a class="citation" href="#cheng2023sdfusion">[9]</a> </figcaption>
+</figure>
+
+<h1 id="references">References</h1>
+<ol class="bibliography"><li><span id="zhou20213d">[1]L. Zhou, Y. Du, and J. Wu, “3d shape generation and completion through point-voxel diffusion,” in <i>Proceedings of the IEEE/CVF International Conference on Computer Vision</i>, 2021, pp. 5826–5835.</span></li>
+<li><span id="liu2019point">[2]Z. Liu, H. Tang, Y. Lin, and S. Han, “Point-voxel cnn for efficient 3d deep learning,” <i>Advances in Neural Information Processing Systems</i>, vol. 32, 2019.</span></li>
+<li><span id="luo2021diffusion">[3]S. Luo and W. Hu, “Diffusion probabilistic models for 3d point cloud generation,” in <i>Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition</i>, 2021, pp. 2837–2845.</span></li>
+<li><span id="rombach2022high">[4]R. Rombach, A. Blattmann, D. Lorenz, P. Esser, and B. Ommer, “High-resolution image synthesis with latent diffusion models,” in <i>Proceedings of the IEEE/CVF conference on computer vision and pattern recognition</i>, 2022, pp. 10684–10695.</span></li>
+<li><span id="vahdat2022lion">[5]A. Vahdat <i>et al.</i>, “LION: Latent Point Diffusion Models for 3D Shape Generation,” <i>Advances in Neural Information Processing Systems</i>, vol. 35, pp. 10021–10039, 2022.</span></li>
+<li><span id="park2019deepsdf">[6]J. J. Park, P. Florence, J. Straub, R. Newcombe, and S. Lovegrove, “Deepsdf: Learning continuous signed distance functions for shape representation,” in <i>Proceedings of the IEEE/CVF conference on computer vision and pattern recognition</i>, 2019, pp. 165–174.</span></li>
+<li><span id="nam20223d">[7]G. Nam, M. Khlifi, A. Rodriguez, A. Tono, L. Zhou, and P. Guerrero, “3d-ldm: Neural implicit 3d shape generation with latent diffusion models,” <i>arXiv preprint arXiv:2212.00842</i>, 2022.</span></li>
+<li><span id="radford2021learning">[8]A. Radford <i>et al.</i>, “Learning transferable visual models from natural language supervision,” in <i>International conference on machine learning</i>, 2021, pp. 8748–8763.</span></li>
+<li><span id="cheng2023sdfusion">[9]Y.-C. Cheng, H.-Y. Lee, S. Tulyakov, A. G. Schwing, and L.-Y. Gui, “Sdfusion: Multimodal 3d shape completion, reconstruction, and generation,” in <i>Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition</i>, 2023, pp. 4456–4465.</span></li></ol>]]></content><author><name>Xiaozhi(Alan) Zhu</name><email>xiaozhizhu1994@gmail.com</email></author><category term="ML" /><category term="CV" /><category term="Diffusion Model" /><summary type="html"><![CDATA[Incomprehensive survey of diffusion models for 3D shape generation, covering Point-Voxel Diffusion (PVD), Diffusion Probabilistic Models (DPM), LION, 3D-LDM, and SDFusion. Explores different 3D representations (point clouds, voxels, SDF) and their integration with diffusion frameworks for generating high-quality 3D shapes.]]></summary></entry><entry><title type="html">Notes on Diffusion Model (II) – Conditional Generation</title><link href="http://localhost:4000/2025/09/02/diffusion-model-ii.html" rel="alternate" type="text/html" title="Notes on Diffusion Model (II) – Conditional Generation" /><published>2025-09-02T00:00:00-07:00</published><updated>2025-09-02T00:00:00-07:00</updated><id>http://localhost:4000/2025/09/02/diffusion-model-ii</id><content type="html" xml:base="http://localhost:4000/2025/09/02/diffusion-model-ii.html"><![CDATA[<h1 id="introduction">Introduction</h1>
+<p>In previous discussion, we have shown power of pixel-based idiffusion models on a variety of dataset and tasks such as image synthesis and sampling.
+These models achieved state-of-the-art synthesis quality.
+In this post, we are going to discuss some recent works on conditional generation which means guide the generation process with additional conditions.
+A naive solution is to train a diffusion model specific on certain dataset and generate samples with it.
+However, more commonly, we want to generate samples conditioned on class labels or a piece of descriptive text.
+Building on this, an more sophisticated method is add label \(y\) into input and, therefore, the diffusion process will take class information into consideration.
+However, due to performance reason, there are multiple algorithm have been proposed to achieve higher generation quality.</p>
+
+<h1 id="classifier-guided-diffusion">Classifier Guided Diffusion</h1>
+<p>In order to explicit utilize class label information to guide the diffusion process, <a class="citation" href="#dhariwal2021diffusion">[1]</a> applying the gradient of a trained classifier to guide the diffusion sampling process.</p>
+
+<p>There are three important components in this approach: classifier training, incorporate label information into diffusion model training and classifier-guided sample generation.</p>
+
+<ol>
+  <li><strong>Classifier training</strong>:
+ A classifier \(p(y\mid x)\) can be exploited to improve a diffusion generator by providing gradient \(\nabla_x p(y\mid x)\) to the sampling process.
+ Since the generated images at intermediate steps are noisy, the trained classifier should be able to adapt to these noises.
+ Therefore, the classifier \(p_\phi(y\mid x_t, t)\) is trained on noisy images \(x_t\) and then use gradients \(\nabla_{x_t}\log p_\phi(y|x_t, t)\) to guide the diffusion sampling process towards an arbitrary class label y.</li>
+  <li><strong>Adaptive group normalization</strong>:
+ The paper incorporated adaptive group normalization layer \(\mathrm{AdaGN}(h,y)=y_s\mathrm{GroupNorm}(h)+y_b\) into the neural network, where \(h\) is the output of previous hidden layer and \(y=[y_s, y_b]\) is obtained from a linear projection of the timestep and class embedding.</li>
+  <li><strong>Conditional reverse noising process</strong>:
+ The paper <a class="citation" href="#dhariwal2021diffusion">[1]</a> proved that the reverse transition distribution can be written in the form as \(p_{\theta, \phi}\left(x_t \mid x_{t+1}, y\right)=Z p_\theta\left(x_t \mid x_{t+1}\right) p_\phi\left(y \mid x_t\right)\).<br />
+ This can be observed from the following relationship:
+ \(\begin{align}
+     q(x_t\mid x_{t+1}, y)=&amp;\frac{q(x_t,x_{t+1}, y)}{q(x_{t+1},y)}\nonumber\\
+     =&amp;q(y\mid x_t, x_{t+1})\frac{q(x_t, x_{t+1})}{q(x_{t+1}, y)}\nonumber\\
+     =&amp;\left(\frac{q(x_{t+1}\mid x_t, y)q(x_t, y)}{q(x_t,x_{t+1})}\right)\frac{q(x_t\mid x_{t+1})}{q(y\mid x_{t+1})}\nonumber\\
+     =&amp;\left(\frac{q(x_{t+1}\mid x_t)q(y\mid x_t)}{q(x_{t+1}\mid x_t)}\right)\frac{q(x_t\mid x_{t+1})}{q(y\mid x_{t+1})}\nonumber\\
+     =&amp;\frac{q(x_t\mid x_{t+1})q(y\mid x_t)}{q(y\mid x_{t+1})},
+ \end{align}\)
+ where \(q(y\mid x_{t+1})\) can be viewed as a constant since it does not contain \(x_t\).</li>
+</ol>
+
+<p>We can write the reverse process(step 3) in DDIM’s language.
+Recall that \(\nabla_{x_t}\log p_\theta(x_t)=-\frac{1}{\sqrt{1-\bar{\alpha}_t}}\epsilon_\theta(x_t, t)\) and we can write the score function for the joint distribution of \((x_t, y)\) as follows,</p>
+
+\[\begin{aligned}
+\nabla_{\mathbf{x}_t} \log q\left(\mathbf{x}_t, y\right) &amp; =\nabla_{\mathbf{x}_t} \log q\left(\mathbf{x}_t\right)+\nabla_{\mathbf{x}_t} \log q\left(y \mid \mathbf{x}_t\right) \\
+&amp; \approx-\frac{1}{\sqrt{1-\bar{\alpha}_t}} \epsilon_\theta\left(\mathbf{x}_t, t\right)+\nabla_{\mathbf{x}_t} \log p_\phi\left(y \mid \mathbf{x}_t\right) \\
+&amp; =-\frac{1}{\sqrt{1-\bar{\alpha}_t}}\left(\boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t\right)-\sqrt{1-\bar{\alpha}_t} \nabla_{\mathbf{x}_t} \log p_\phi\left(y \mid \mathbf{x}_t\right)\right).
+\end{aligned}\]
+
+<p>Therefore, we obtained the new noise prediction \(\hat{\epsilon}(x_t)\) as</p>
+
+\[\begin{equation}
+\hat{\epsilon}(x_t):=\epsilon_\theta(x_t)-\sqrt{1-\bar{\alpha}_t}\nabla_{x_t}\log p_\phi(y\mid x_t).
+\end{equation}\]
+
+<p>The paper provided detailed algorithms based on DDPM and DDIM.</p>
+<figure>
+  <img src="../../../assets/img/diffusion-model/classifier-guide-algos.png" style="width:100%" />
+  <figcaption>Fig.1 - DDPM and DDIM based classifier-guided diffusion model. </figcaption>
+</figure>
+
+<h1 id="classifier-free-guidance-diffusion-model">Classifier-Free Guidance Diffusion model</h1>
+<p>Since training an independent classifier \(p_\phi(y\mid x)\) involved extra effort, <a class="citation" href="#ho2022classifier">[2]</a> proposed algorithm to run conditional diffusion steps without an independent classifier.
+The paper incorporated the scores from a conditional and an unconditional diffusion model.
+The method includes two components:</p>
+<ol>
+  <li>Replace the previously trained classifier with the implicit classifier according to <a href="https://sander.ai/2022/05/26/guidance.html">Bayesian Rule</a>.
+\(\begin{aligned}
+\nabla_{\mathbf{x}_t} \log p\left(y \mid \mathbf{x}_t\right) &amp; =\nabla_{\mathbf{x}_t} \log p\left(\mathbf{x}_t \mid y\right)-\nabla_{\mathbf{x}_t} \log p\left(\mathbf{x}_t\right) \\
+&amp; =-\frac{1}{\sqrt{1-\bar{\alpha}_t}}\left(\boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t, y\right)-\boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t\right)\right)
+\end{aligned}\)</li>
+  <li>Use a single neural network to function as two noise generators– a conditional one and a unconditional one. It can be done by let \(\epsilon_\theta(x_t, t)=\epsilon_\theta(x_t, t, y=\varnothing)\) for unconditional generation and \(\epsilon_\theta(x_t, t, y)\) for conditional generation towards class label \(y\). Therefore, the new noise generation function can be deduced as follows.</li>
+</ol>
+
+\[\begin{align}
+\overline{\boldsymbol{\epsilon}}_\theta\left(\mathbf{x}_t, t, y\right) &amp; =\boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t, y\right)-\sqrt{1-\bar{\alpha}_t} w \nabla_{\mathbf{x}_t} \log p\left(y \mid \mathbf{x}_t\right) \\
+&amp; =\boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t, y\right)+w\left(\boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t, y\right)-\boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t\right)\right) \\
+&amp; =(w+1) \boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t, y\right)-w \boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t\right)
+\end{align}\]
+
+<h1 id="latent-diffusion-models">Latent Diffusion Models</h1>
+<p>Operating on pixel space is exceptional costful.
+For algorithms like diffusion models, it is even more demanding, since the recursive updates amplified this cost.
+A common solution in ML to deal with high dimensionality is embedding data into lower dimensional latent space.
+It is observed in <a class="citation" href="#rombach2022high">[3]</a> that most bits of an image contribute to perceptual details and the semantic and conceptual composition remains intact  after undergoing aggressive compression.
+This motivates <a class="citation" href="#rombach2022high">[3]</a>  to first embed the image into latent space, with models like VAE, then train a diffusion model in latent space.
+Moreover, it loosely decomposes the perceptual compression (removing high-frequency details) and semantic compression (semantic and conceptual composition of the data).
+In practice, a VAE can be used first to trimming off pixel-level redundancy and an U-Net backboned diffusion process can be used to learn to manipulate semantic concepts.</p>
+<figure>
+  <img src="../../../assets/img/diffusion-model/sematic-perceptual-comp.png" style="width:100%" />
+  <figcaption>Fig.1 - The plot shows the [rate-distortion trade-off](https://en.wikipedia.org/wiki/Rate%E2%80%93distortion_theory). Notice that semantic compression and perceptual compression happens at different stages in the plot. The graph is taken from <a class="citation" href="#rombach2022high">[3]</a>. Bits per dim and RMSE measures different aspect for generative model. Details can be found in <a class="citation" href="#theis2015note">[4]</a>. [Simple explaination.](https://blog.csdn.net/fanyue1997/article/details/109703025)</figcaption>
+</figure>
+
+<h2 id="methods">Methods</h2>
+
+<p>The <strong>perception compression process</strong> is depended on an autoencoder model.
+And encoder \(\mathcal{E}\) encodes an image \(x\in\mathbb{R}^{H\times W\times 3}\) in RGB space into a latent representation \(z=\mathbb{E}(x)\), and an decoder \(\mathcal{D}\) reconstructs the image from its latent \(\tilde{x}=\mathcal{D}(z)=\mathcal{D}(\mathcal{E}(x))\).
+In contrary to other previous work <a class="citation" href="#esser2021taming">[5]</a>, the paper use a two dimensional latent space to better suit the follow up diffusion model.
+The  paper explored two types of regularization in autoencoder to avoid arbitrarily high-variance in the latent space.</p>
+
+<ul>
+  <li>KL-reg: A small KL penalty towards a standard normal.</li>
+  <li>VQ-reg: Uses a vector quantization layer within the decoder, like VQVAE but the quantization layer absorbed by the decoder.</li>
+</ul>
+
+<p>The <strong>semantic compression</strong> stage happens in the latent space.
+After the autoencoder, the paper construct a diffusion model in latent space with U-Net being the backbone neural network.
+Denote the backbone neural network as \(\epsilon_\theta(\circ, t)\) and the loss function is</p>
+
+\[\begin{equation}\label{eq:LDM-loss}
+L_{L D M}:=\mathbb{E}_{\mathcal{E}(x), \epsilon \sim \mathcal{N}(0,1), t}\left[\left\|\epsilon-\epsilon_\theta\left(z_t, t\right)\right\|_2^2\right].
+\end{equation}\]
+
+<p>As in many other generative models and the topic of this blog, <strong>conditional mechanisms</strong> can be applied to this framework and, to be more specific, in the latent space.
+The paper implemented this by adding the additional inputs \(y\) to the denoising autoencoder as \(\epsilon_\theta\left(z_t, t, y\right)\).
+The additional inputs \(y\) can be text, semantics maps or other “embedible information” like images and it aims to controll the synthesis process.</p>
+
+<ol>
+  <li>
+    <p>Due to the various modalities of the inputs, the paper first project the inputs \(y\) to an “intermediate representation”(embedding) \(\tau_\theta(y)\in\mathbb{R}^{M\times d_\tau}\).</p>
+  </li>
+  <li>
+    <p>Cross-attention layer is used to apply controlling signal \(\tau_\theta(y)\) to the diffusion process through U-Net backbone. To be more specific, \(\mathrm{Attention}(Q, K, V)=\mathrm{softmax}\left(\frac{QK^T}{\sqrt{d}}\right)\), with</p>
+  </li>
+</ol>
+
+\[Q=W_Q^{(i)} \cdot \varphi_i\left(z_t\right), K=W_K^{(i)} \cdot \tau_\theta(y), V=W_V^{(i)} \cdot \tau_\theta(y).\]
+
+<p>Based on image-conditioning pairs, we then learn the conditional LDM via the loss</p>
+
+\[L_\mathrm{LDM}:=\mathbb{E}_{\mathcal{E}(x), y, \epsilon \sim \mathcal{N}(0,1), t}\left[\left\|\epsilon-\epsilon_\theta\left(z_t, t, \tau_\theta(y)\right)\right\|_2^2\right].\]
+
+<figure>
+  <img src="../../../assets/img/diffusion-model/LDM-flowchart.png" style="width:100%" />
+  <figcaption>Fig.2 . Image source: <a class="citation" href="#rombach2022high">[3]</a> </figcaption>
+</figure>
+
+<h2 id="experiments">Experiments</h2>
+<p>The paper examine the model performance in two aspects:</p>
+<ol>
+  <li>Enerated samples’ perceptual quality and training efficiency</li>
+  <li>Sampling efficiency</li>
+</ol>
+
+<p><strong>Perceptual Compression Tradeoffs</strong></p>
+<figure>
+  <img src="../../../assets/img/diffusion-model/LDM-example.png" style="width:100%" />
+  <figcaption>Fig.3 Image samples generated from LDM-8(KL) on LAION dataset with 200 DDIM steps. Perceptually, the LDM is capable of generating high fidelity images under the prompt constraint. Image source: <a class="citation" href="#rombach2022high">[3]</a> </figcaption>
+</figure>
+<p>In this experiment, the paper compared FID/Inception scores under different downsample rate at different training steps.
+The experiment observed that LDM, with proper downsample rate, achieved siginificant better FID scores comparing with pixel-based diffusion model.</p>
+<figure>
+  <img src="../../../assets/img/diffusion-model/LDM-training-efficiency.png" style="width:100%" />
+  <figcaption>Fig.4 FID and Inception score under different setup. LDM-k where k means downsample coefficient. As training steps increase, the both scores improves under all circumstance. Meanwhile, LDM-8 achieved siginificant better quality than LDM-1(pixel-based diffusion) and achieved faster. Image source: <a class="citation" href="#rombach2022high">[3]</a> </figcaption>
+</figure>
+
+<p><strong>Sampling Efficiency</strong></p>
+<figure>
+  <img src="../../../assets/img/diffusion-model/LDM-sampling-efficiency.png" style="width:100%" />
+  <figcaption>Fig.5 Log FID vs throughput. Left CelebA-HQ and right ImageNet. As we expected, updating reverse diffusion steps in lower dimensional embedding space is less costful and have higher throughput. Moreover, LDM-32 is not only generating samples much faster(visually, at x20) than LDM-1 and LDM-2, it also generate samples with higher quality(in terms of FID). Image source: <a class="citation" href="#rombach2022high">[3]</a> </figcaption>
+</figure>
+
+<p>The LDM also demonstrated better sampling efficiency.
+Moreover, it generates samples faster and at a higher quality.</p>
+
+<h1 id="references">References</h1>
+<ol class="bibliography"><li><span id="dhariwal2021diffusion">[1]P. Dhariwal and A. Nichol, “Diffusion models beat gans on image synthesis,” <i>Advances in neural information processing systems</i>, vol. 34, pp. 8780–8794, 2021.</span></li>
+<li><span id="ho2022classifier">[2]J. Ho and T. Salimans, “Classifier-free diffusion guidance,” <i>arXiv preprint arXiv:2207.12598</i>, 2022.</span></li>
+<li><span id="rombach2022high">[3]R. Rombach, A. Blattmann, D. Lorenz, P. Esser, and B. Ommer, “High-resolution image synthesis with latent diffusion models,” in <i>Proceedings of the IEEE/CVF conference on computer vision and pattern recognition</i>, 2022, pp. 10684–10695.</span></li>
+<li><span id="theis2015note">[4]L. Theis, A. van den Oord, and M. Bethge, “A note on the evaluation of generative models,” <i>arXiv preprint arXiv:1511.01844</i>, 2015.</span></li>
+<li><span id="esser2021taming">[5]P. Esser, R. Rombach, and B. Ommer, “Taming transformers for high-resolution image synthesis,” in <i>Proceedings of the IEEE/CVF conference on computer vision and pattern recognition</i>, 2021, pp. 12873–12883.</span></li></ol>]]></content><author><name>Xiaozhi(Alan) Zhu</name><email>xiaozhizhu1994@gmail.com</email></author><category term="ML" /><category term="CV" /><category term="Diffusion Model" /><summary type="html"><![CDATA[Advanced diffusion models for conditional generation, covering classifier-guided diffusion, classifier-free guidance, and latent diffusion models. Explores techniques for controlling image generation using class labels, text prompts, and other conditional inputs.]]></summary></entry><entry><title type="html">Notes on Diffusion Models (I) – DDPM and DDIM</title><link href="http://localhost:4000/2025/09/01/diffusion-model.html" rel="alternate" type="text/html" title="Notes on Diffusion Models (I) – DDPM and DDIM" /><published>2025-09-01T00:00:00-07:00</published><updated>2025-09-01T00:00:00-07:00</updated><id>http://localhost:4000/2025/09/01/diffusion-model</id><content type="html" xml:base="http://localhost:4000/2025/09/01/diffusion-model.html"><![CDATA[<h1 id="introduction">Introduction</h1>
+
+<p>A central challenge in machine learning, particularly in generative modeling, is to model complex datasets using highly flexible families of probability distributions that maintain analytical or computational tractability for learning, sampling, inference, and evaluation.</p>
+
+<p>This post summarizes the fundamental concepts of diffusion models, their optimization strategies, and applications, focusing on the mathematical foundations and practical implications.</p>
+
+<h1 id="denoising-diffusion-probabilistic-models-ddpm">Denoising Diffusion Probabilistic Models (DDPM)</h1>
+
+<p>Diffusion models are a class of generative models first proposed by <a class="citation" href="#sohl2015deep">[1]</a>. Inspired by nonequilibrium thermodynamics, the method systematically and gradually destroys data structure through a forward diffusion process, then learns a reverse process to restore structure and yield a highly flexible and tractable generative model.</p>
+
+<h2 id="forward-process">Forward Process</h2>
+
+<p>A diffusion model formulates the learned data distribution as \(p_\theta(x_0) := \int p_\theta(x_{0:T})dx_{1:T}\), where \(x_1, x_2, \ldots, x_T\) are latent variables with the same dimensionality as the real data \(x_0 \sim q(x_0)\).</p>
+
+<p>The forward process is a Markov chain where transitions from \(x_t\) to \(x_{t+1}\) follow multivariate Gaussian distributions. The joint distribution of latent variables (\(x_{1:T}\)) given the real data \(x_0\) is:
+<!-- The joint distribution $p_\theta$ is called the reverse process, and it is deffined as a Markov chain with Gaussian transitions starting at $x_T\sim \mathcal{N}(x_T;0,I)$: --></p>
+
+\[\begin{equation}\label{eq:diff_model_origin}
+q\left(\mathbf{x}_{1: T} \mid \mathbf{x}_0\right):=\prod_{t=1}^T q\left(\mathbf{x}_t \mid \mathbf{x}_{t-1}\right), \quad q\left(\mathbf{x}_t \mid \mathbf{x}_{t-1}\right):=\mathcal{N}\left(\mathbf{x}_t ; \sqrt{1-\beta_t} \mathbf{x}_{t-1}, \beta_t \mathbf{I}\right).
+\end{equation}\]
+
+<p><strong>Key properties:</strong></p>
+
+<ol>
+  <li>The coefficients \(\{\beta_t\}\) are pre-defined and determine the “velocity” of diffusion.</li>
+  <li>After sufficient diffusion steps, the final state \(x_T\) approaches an isotropic Gaussian distribution when \(T\) is large enough.</li>
+  <li>For clarity, we use \(p_\theta\) to represent the learned distribution and \(q\) to represent the real data distribution.</li>
+</ol>
+
+<p>A notable property of this forward process, as mentioned in <a class="citation" href="#ho2020denoising">[2]</a> (Section 2), is that \(x_t\) has a closed-form expression derived using the <a href="https://gregorygundersen.com/blog/2018/04/29/reparameterization/">reparameterization trick</a>. Let \(\alpha_t = 1-\beta_t\) and \(\bar{\alpha}_t = \prod_{i=1}^t\alpha_i\):</p>
+
+\[\begin{align}
+\mathbf{x}_t=&amp;\sqrt{\alpha_t}\mathbf{x}_{t-1}+\sqrt{1-\alpha_t}\mathbf{\epsilon}_{t-1}\nonumber\\
+=&amp;\sqrt{\alpha_t}(\sqrt{\alpha_{t-1}}\mathbf{x}_{t-2}+\sqrt{1-\alpha_{t-1}}\mathbf{\epsilon}_{t-2})+\sqrt{1-\alpha_t}\mathbf{\epsilon}_{t-1}\nonumber\\
+=&amp;\sqrt{\alpha_t\alpha_{t-1}}\mathbf{x}_{t-2}+\left(\sqrt{\alpha_t(1-\alpha_{t-1})}\mathbf{\epsilon}_{t-2}+\sqrt{1-\alpha_t}\mathbf{\epsilon}_{t-1}\right)\nonumber\\
+=&amp;\sqrt{\alpha_t\alpha_{t-1}}\mathbf{x}_{t-2}+\sqrt{1-\alpha_t\alpha_{t-1}}\bar{\epsilon}_{t-2},~~~~~~\bar{\epsilon}_{t-2}\sim\mathcal{N}(\mathbf{0,I})(*)\nonumber\\
+=&amp;\cdots\nonumber\\
+=&amp;\sqrt{\bar{\alpha}_t}\mathbf{x}_0+\sqrt{1-\bar{\alpha}_t}\bar{\epsilon},~~~~~~\bar{\epsilon}\sim\mathcal{N}(\mathbf{0,I})\label{eq:xt_x0_relation}
+\end{align}\]
+
+<p>\(^*\) The sum of two uncorrelated multivariate normal distributions \(\mathcal{N}(\boldsymbol{\mu}_1,\sigma_1^2\mathbf{I})\) and \(\mathcal{N}(\boldsymbol{\mu}_2,\sigma_2^2\mathbf{I})\) is also a multivariate normal distribution \(\mathcal{N}(\boldsymbol{\mu}_1 + \boldsymbol{\mu}_2,(\sigma_1^2+\sigma_2^2)\mathbf{I})\) (<a href="https://en.wikipedia.org/wiki/Sum_of_normally_distributed_random_variables">proof details</a>).</p>
+
+<p>Typically, we can afford larger update steps when the sample becomes noisier, so \(\beta_1 &lt; \beta_2 &lt; \cdots &lt; \beta_T\) and therefore \(\bar{\alpha}_1 &gt; \bar{\alpha}_2 &gt; \cdots &gt; \bar{\alpha}_T\).</p>
+
+<h2 id="reverse-process">Reverse Process</h2>
+
+<p>Ideally, if we knew \(q(\mathbf{x}_{t-1} \mid \mathbf{x}_t)\), we could gradually remove noise from corrupted samples to recover the original image. However, this conditional distribution is not readily available and its computation requires the entire dataset. Specifically:</p>
+
+\[\begin{equation}\label{eq:imprac_cond_prob_expr}
+q(\mathbf{x}_{t-1}|\mathbf{x}_t)=\frac{q(\mathbf{x}_{t-1},\mathbf{x}_t)}{q(\mathbf{x}_t)}=q(\mathbf{x}_t|\mathbf{x}_{t-1})\frac{q(\mathbf{x}_{t-1})}{q(\mathbf{x}_t)}=q(\mathbf{x}_t|\mathbf{x}_{t-1})\frac{\int_{\mathbf{x}_0}q(\mathbf{x}_{t-1}|\mathbf{x}_0)\text{d}\mathbf{x}_0}{\int_{\mathbf{x}_0}q(\mathbf{x}_t|\mathbf{x}_0)\text{d}\mathbf{x}_0}.
+\end{equation}\]
+
+<p>Computing \(q(x_{t-1} \mid x_t)\) requires evaluating integrals in Eq. (\ref{eq:imprac_cond_prob_expr}), which is computationally expensive. Instead, we use the diffusion model \(p_\theta(x_{t-1} \mid x_t)\) to learn and approximate the true conditional distribution. When \(\beta_t\) is sufficiently small, \(q(x_{t-1} \mid x_t)\) is also Gaussian (<a href="https://lilianweng.github.io/posts/2021-07-11-diffusion-models/#reverse-diffusion-process">details</a>).</p>
+
+<p>The joint distribution of the diffusion model is:</p>
+
+\[\begin{equation}\label{eq:dm_joint_dist}
+p_\theta\left(\mathbf{x}_{0: T}\right)=p\left(\mathbf{x}_T\right) \prod_{t=1}^T p_\theta\left(\mathbf{x}_{t-1} \mid \mathbf{x}_t\right) \quad p_\theta\left(\mathbf{x}_{t-1} \mid \mathbf{x}_t\right)=\mathcal{N}\left(\mathbf{x}_{t-1} ; \boldsymbol{\mu}_\theta\left(\mathbf{x}_t, t\right), \mathbf{\Sigma}_\theta\left(\mathbf{x}_t, t\right)\right).
+\end{equation}\]
+
+<p>With this distribution, we can sample from an isotropic Gaussian distribution and expect the reverse process to gradually transform it into samples that follow \(p_\theta(x_0) \approx q(x_0)\).</p>
+
+<h2 id="loss-function">Loss Function</h2>
+
+<p>The loss function for training the diffusion model is the standard variational bound on negative log likelihood:</p>
+
+\[\begin{align*}
+\log p_\theta(x_0) =&amp; \log\int_{x_{1:T}}p(x_{0:T})\mathrm{d}x_{1:T} \\
+=&amp; \log\int_{x_{1:T}}p(x_{0:T})\frac{q(x_{1:T}|x_0)}{q(x_{1:T}|x_0)}\mathrm{d}x_{1:T} \\
+=&amp; \log\mathbb{E}_{q(x_{1:T}|x_0)}\left[\frac{p(x_{0:T})}{q(x_{1:T}|x_0)}\right]\\
+\geq&amp;\mathbb{E}_{q(x_{1:T}|x_0)}\left(\log\left[\frac{p(x_{0:T})}{q(x_{1:T}|x_0)}\right]\right).
+\end{align*}\]
+
+<p>Therefore, the expected negative log likelihood is lower bounded by the variational lower bound:</p>
+
+\[\begin{align*}
+\mathbb{E}_{q(x_0)}\left[-\log p_\theta(x_0)\right] \geq &amp; \mathbb{E}_{q(x_0)}\left[-\mathbb{E}_{q(x_{1:T}|x_0)}\left(\log\left[\frac{p(x_{0:T})}{q(x_{1:T}|x_0)}\right]\right)\right] \\
+=&amp; -\mathbb{E}_{q(x_{0:T})}\left(\log\left[\frac{p(x_{0:T})}{q(x_{1:T}|x_0)}\right]\right)\\
+=&amp;: L_\text{VLB}.
+\end{align*}\]
+
+<p>To convert each term in the equation to be analytically computable, the objective can be further rewritten to be a combination of several KL-divergence and entropy terms (See the detailed step-by-step process in Appendix B in <a class="citation" href="#sohl2015deep">[1]</a>):</p>
+
+\[\begin{aligned}
+L_{\mathrm{VLB}} &amp; =\mathbb{E}_{q\left(\mathbf{x}_{0: T}\right)}\left[\log \frac{q\left(\mathbf{x}_{1: T} \mid \mathbf{x}_0\right)}{p_\theta\left(\mathbf{x}_{0: T}\right)}\right] \\
+&amp; =\mathbb{E}_q\left[\log \frac{\prod_{t=1}^T q\left(\mathbf{x}_t \mid \mathbf{x}_{t-1}\right)}{p_\theta\left(\mathbf{x}_T\right) \prod_{t=1}^T p_\theta\left(\mathbf{x}_{t-1} \mid \mathbf{x}_t\right)}\right] \\
+&amp; =\mathbb{E}_q\left[-\log p_\theta\left(\mathbf{x}_T\right)+\sum_{t=1}^T \log \frac{q\left(\mathbf{x}_t \mid \mathbf{x}_{t-1}\right)}{p_\theta\left(\mathbf{x}_{t-1} \mid \mathbf{x}_t\right)}\right] \\
+&amp; =\mathbb{E}_q\left[-\log p_\theta\left(\mathbf{x}_T\right)+\sum_{t=2}^T \log \frac{q\left(\mathbf{x}_t \mid \mathbf{x}_{t-1}\right)}{p_\theta\left(\mathbf{x}_{t-1} \mid \mathbf{x}_t\right)}+\log \frac{q\left(\mathbf{x}_1 \mid \mathbf{x}_0\right)}{p_\theta\left(\mathbf{x}_0 \mid \mathbf{x}_1\right)}\right] \\
+&amp; =\mathbb{E}_q\left[-\log p_\theta\left(\mathbf{x}_T\right)+\sum_{t=2}^T \log \left(\frac{q\left(\mathbf{x}_{t-1} \mid \mathbf{x}_t, \mathbf{x}_0\right)}{p_\theta\left(\mathbf{x}_{t-1} \mid \mathbf{x}_t\right)} \cdot \frac{q\left(\mathbf{x}_t \mid \mathbf{x}_0\right)}{q\left(\mathbf{x}_{t-1} \mid \mathbf{x}_0\right)}\right)+\log \frac{q\left(\mathbf{x}_1 \mid \mathbf{x}_0\right)}{p_\theta\left(\mathbf{x}_0 \mid \mathbf{x}_1\right)}\right] \\
+&amp; =\mathbb{E}_q\left[-\log p_\theta\left(\mathbf{x}_T\right)+\sum_{t=2}^T \log \frac{q\left(\mathbf{x}_{t-1} \mid \mathbf{x}_t, \mathbf{x}_0\right)}{p_\theta\left(\mathbf{x}_{t-1} \mid \mathbf{x}_t\right)}+\sum_{t=2}^T \log \frac{q\left(\mathbf{x}_t \mid \mathbf{x}_0\right)}{q\left(\mathbf{x}_{t-1} \mid \mathbf{x}_0\right)}+\log \frac{q\left(\mathbf{x}_1 \mid \mathbf{x}_0\right)}{p_\theta\left(\mathbf{x}_0 \mid \mathbf{x}_1\right)}\right] \\
+&amp; =\mathbb{E}_q\left[-\log p_\theta\left(\mathbf{x}_T\right)+\sum_{t=2}^T \log \frac{q\left(\mathbf{x}_{t-1} \mid \mathbf{x}_t, \mathbf{x}_0\right)}{p_\theta\left(\mathbf{x}_{t-1} \mid \mathbf{x}_t\right)}+\log \frac{q\left(\mathbf{x}_T \mid \mathbf{x}_0\right)}{q\left(\mathbf{x}_1 \mid \mathbf{x}_0\right)}+\log \frac{q\left(\mathbf{x}_1 \mid \mathbf{x}_0\right)}{p_\theta\left(\mathbf{x}_0 \mid \mathbf{x}_1\right)}\right] \\
+&amp; =\mathbb{E}_q\left[\log \frac{q\left(\mathbf{x}_T \mid \mathbf{x}_0\right)}{p_\theta\left(\mathbf{x}_T\right)}+\sum_{t=2}^T \log \frac{q\left(\mathbf{x}_{t-1} \mid \mathbf{x}_t, \mathbf{x}_0\right)}{p_\theta\left(\mathbf{x}_{t-1} \mid \mathbf{x}_t\right)}-\log p_\theta\left(\mathbf{x}_0 \mid \mathbf{x}_1\right)\right] \\
+&amp; =\mathbb{E}_q[\underbrace{D_{\mathrm{KL}}\left(q\left(\mathbf{x}_T \mid \mathbf{x}_0\right) \| p_\theta\left(\mathbf{x}_T\right)\right)}_{L_T}+\sum_{t=2}^T \underbrace{D_{\mathrm{KL}}\left(q\left(\mathbf{x}_{t-1} \mid \mathbf{x}_t, \mathbf{x}_0\right) \| p_\theta\left(\mathbf{x}_{t-1} \mid \mathbf{x}_t\right)\right)}_{L_{t-1}} \underbrace{-\log p_\theta\left(\mathbf{x}_0 \mid \mathbf{x}_1\right)}_{L_0}].
+\end{aligned}\]
+
+<p>In summary, we can split the variational lower bound into \((T+1)\) components and label them as follows:</p>
+
+\[\begin{aligned}
+L_{\mathrm{VLB}} &amp; =L_T+L_{T-1}+\cdots+L_0 \\
+\text { where } L_T &amp; =D_{\mathrm{KL}}\left(q\left(\mathbf{x}_T \mid \mathbf{x}_0\right) \| p_\theta\left(\mathbf{x}_T\right)\right), \\
+L_t &amp; =D_{\mathrm{KL}}\left(q\left(\mathbf{x}_t \mid \mathbf{x}_{t+1}, \mathbf{x}_0\right) \| p_\theta\left(\mathbf{x}_t \mid \mathbf{x}_{t+1}\right)\right) \text { for } 1 \leq t \leq T-1, \\
+L_0 &amp; =-\log p_\theta\left(\mathbf{x}_0 \mid \mathbf{x}_1\right).
+\end{aligned}\]
+
+<p>In the above decomposition:</p>
+<ol>
+  <li>\(q(x_T \mid x_0)\) can be computed from Eq. (\ref{eq:xt_x0_relation})</li>
+  <li>\(p_\theta(x_t \mid x_{t+1})\) are parameterized and learned</li>
+</ol>
+
+<p>Next, we show that \(q\left(\mathbf{x}_t \mid \mathbf{x}_{t+1}, \mathbf{x}_0 \right)\) can be computed in closed form even though \(q\left(\mathbf{x}_t \mid \mathbf{x}_{t+1} \right)\) can’t.</p>
+
+\[\begin{align}
+q\left(\mathbf{x}_{t-1} \mid \mathbf{x}_t, \mathbf{x}_0\right) &amp; =q\left(\mathbf{x}_t \mid \mathbf{x}_{t-1}, \mathbf{x}_0\right) \frac{q\left(\mathbf{x}_{t-1} \mid \mathbf{x}_0\right)}{q\left(\mathbf{x}_t \mid \mathbf{x}_0\right)}\nonumber \\
+&amp; \propto \exp \left(-\frac{1}{2}\left(\frac{\left(\mathbf{x}_t-\sqrt{\alpha_t} \mathbf{x}_{t-1}\right)^2}{\beta_t}+\frac{\left(\mathbf{x}_{t-1}-\sqrt{\bar{\alpha}_{t-1}} \mathbf{x}_0\right)^2}{1-\bar{\alpha}_{t-1}}-\frac{\left(\mathbf{x}_t-\sqrt{\bar{\alpha}_t} \mathbf{x}_0\right)^2}{1-\bar{\alpha}_t}\right)\right)\nonumber \\
+&amp; =\exp \left(-\frac{1}{2}\left(\frac{\mathbf{x}_t^2-2 \sqrt{\alpha_t} \mathbf{x}_t \mathbf{x}_{t-1}+\alpha_t \mathbf{x}_{t-1}^2}{\beta_t}+\frac{\mathbf{x}_{t-1}^2-2 \sqrt{\bar{\alpha}_{t-1}} \mathbf{x}_0 \mathbf{x}_{t-1}+\bar{\alpha}_{t-1} \mathbf{x}_0^2}{1-\bar{\alpha}_{t-1}}-\frac{\left(\mathbf{x}_t-\sqrt{\bar{\alpha}_t} \mathbf{x}_0\right)^2}{1-\bar{\alpha}_t}\right)\right)\nonumber \\
+&amp; =\exp \left(-\frac{1}{2}\left(\left(\frac{\alpha_t}{\beta_t}+\frac{1}{1-\bar{\alpha}_{t-1}}\right) \mathbf{x}_{t-1}^2-\left(\frac{2 \sqrt{\alpha_t}}{\beta_t} \mathbf{x}_t+\frac{2 \sqrt{\bar{\alpha}_{t-1}}}{1-\bar{\alpha}_{t-1}} \mathbf{x}_0\right) \mathbf{x}_{t-1}+C\left(\mathbf{x}_t, \mathbf{x}_0\right)\right)\right) \
+\end{align}\]
+
+<p>From the above derivation, we observe that the conditional distribution \(q\left(\mathbf{x}_{t-1} \mid \mathbf{x}_t, \mathbf{x}_0\right)\) is also Gaussian and can be written in standard multivariate normal form as \(q\left(\mathbf{x}_{t-1} \mid \mathbf{x}_t, \mathbf{x}_0\right)=\mathcal{N}\left(x_{t-1};\tilde{\mu}(x_t,x_0), \tilde{\beta}_t\mathbf{I}\right)\).
+Notice that \(ax^2+bx+c =\frac{1}{1/a}\left(x^2+\frac{b}{a}x+\frac{c}{a}\right)=\frac{1}{1/a}\left((x+\frac{b}{2a})^2+\text{ const }\right)\), the \(\tilde{\mu}\) and \(\tilde{\beta}_t\) can be computed as follows,</p>
+
+\[\begin{align}
+\tilde{\beta}_t &amp;= 1/\left(\frac{\alpha_t}{\beta_t}+\frac{1}{1-\bar{\alpha}_{t-1}}\right)=\frac{1-\bar{\alpha}_{t-1}}{1-\bar{\alpha}_t}\beta_t\label{eq:standard_form_beta_t},\\
+\tilde{\mu}(x_t,x_0) &amp;= \left(\frac{\sqrt{\alpha_t}}{\beta_t} \mathbf{x}_t+\frac{\sqrt{\bar{\alpha}_{t-1}}}{1-\bar{\alpha}_{t-1}} \mathbf{x}_0\right) /\left(\frac{\alpha_t}{\beta_t}+\frac{1}{1-\bar{\alpha}_{t-1}}\right)\nonumber\\
+&amp;= \frac{\sqrt{\alpha_t}\left(1-\bar{\alpha}_{t-1}\right)}{1-\bar{\alpha}_t} \mathbf{x}_t+\frac{\sqrt{\bar{\alpha}_{t-1}} \beta_t}{1-\bar{\alpha}_t} \mathbf{x}_0\label{eq:standard_form_mu_t}.
+\end{align}\]
+
+<p>Recall the relation between \(x_t\) and \(x_0\) deduced from Eq. \ref{eq:xt_x0_relation}, the Eq. \ref{eq:standard_form_mu_t} can be further rewrited as follows:</p>
+
+\[\begin{aligned}
+\tilde{\boldsymbol{\mu}}_t &amp; =\frac{\sqrt{\alpha_t}\left(1-\bar{\alpha}_{t-1}\right)}{1-\bar{\alpha}_t} \mathbf{x}_t+\frac{\sqrt{\bar{\alpha}_{t-1}} \beta_t}{1-\bar{\alpha}_t} \frac{1}{\sqrt{\bar{\alpha}_t}}\left(\mathbf{x}_t-\sqrt{1-\bar{\alpha}_t} \epsilon_t\right) \\
+&amp; =\frac{1}{\sqrt{\alpha_t}}\left(\mathrm{x}_t-\frac{1-\alpha_t}{\sqrt{1-\bar{\alpha}_t}} \epsilon_t\right)
+\end{aligned}\]
+
+<h2 id="parameterization-of-reverse-diffusion-process-and-l_t">Parameterization of reverse diffusion process and \(L_t\)</h2>
+<p>Recall our previous decomposition of variational lower bound loss, we have closed form computation of real data distribution (i.e. \(q(x_T\mid x_0)\) and \(q(x_t\mid x_{t+1}, x_0)\)), we still need a parameterization of \(p_\theta(x_t\mid x_{t+1})\).
+As we discussed previously, when \(\beta_t\) is small enough, we can approximate \(q(x_t\mid x_{t+1})\) by the Gaussian distribution \(p_\theta\left(\mathbf{x}_{t-1} \mid \mathbf{x}_t\right)=\mathcal{N}\left(\mathbf{x}_{t-1} ; \boldsymbol{\mu}_\theta\left(\mathbf{x}_t, t\right), \boldsymbol{\Sigma}_\theta\left(\mathbf{x}_t, t\right)\right)\).
+We expect that the training process can let \(\mu_\theta\) to predict \(\tilde{\mu}_t\).
+With this parameterization, each component of loss function \(L_t=D_{\mathrm{KL}}\left(q\left(\mathbf{x}_t \mid \mathbf{x}_{t+1}, \mathbf{x}_0\right) \| p_\theta\left(\mathbf{x}_t \mid \mathbf{x}_{t+1}\right)\right)\) is the KL divergence between two multivariate Gaussian distributions and has a <a href="https://mr-easy.github.io/2020-04-16-kl-divergence-between-2-gaussian-distributions/">relatively simple closed form</a>.
+The loss term \(L_t\) become</p>
+
+\[\begin{align}
+L_t =&amp; D_{\mathrm{KL}}\left(q\left(\mathbf{x}_t \mid \mathbf{x}_{t+1}, \mathbf{x}_0\right) \| p_\theta\left(\mathbf{x}_t \mid \mathbf{x}_{t+1}\right)\right)$ \nonumber\\
+=&amp; \frac{1}{2}\left[\log\frac{| \boldsymbol{\Sigma}_\theta\left(\mathbf{x}_t, t\right)|}{|\tilde{\beta}_t \mathbf{I}|}+(\tilde{\mu}_t-\mu_\theta)^T\boldsymbol{\Sigma}_\theta\left(\mathbf{x}_t, t\right)^{-1}(\tilde{\mu}_t-\mu_\theta)+\text{tr}\left\{\boldsymbol{\Sigma}_\theta\left(\mathbf{x}_t, t\right)^{-1}\tilde{\beta}_t \mathbf{I}\right\}\right].\label{eq:lt_before_simple_sigma}
+\end{align}\]
+
+<p>In practice, we can further simplify the loss function Eq. (\ref{eq:lt_before_simple_sigma}) by predefine the variancen matrix as \(\boldsymbol{\Sigma}_\theta\left(\mathbf{x}_t, t\right)=\sigma_t^2\mathbf{I}\) and, experimentally, \(\sigma_t^2=\tilde{\beta}_t=\frac{1-\bar{\alpha}_{t-1}}{1-\bar{\alpha_t}}\beta_t\) or \(\sigma^2_t=\beta_t\) had similar results.
+Therefore, we can write:</p>
+
+\[\begin{equation}\label{eq:lt_mu_t_not_param}
+L_{t-1}=\mathbb{E}_q\left[\frac{1}{2 \sigma_t^2}\left\|\tilde{\boldsymbol{\mu}}_t\left(\mathbf{x}_t, \mathbf{x}_0\right)-\boldsymbol{\mu}_\theta\left(\mathbf{x}_t, t\right)\right\|^2\right]+C.
+\end{equation}\]
+
+<p>Furthermore, \(\mu_\theta\) is further parameterized in section 3.2 of <a class="citation" href="#ho2020denoising">[2]</a> to be corresponded with the form of \(\tilde{\mu}_t\) in Eq. (\ref{eq:standard_form_mu_t}) as follows,</p>
+
+\[\begin{equation}
+\boldsymbol{\mu}_\theta\left(\mathbf{x}_t, t\right)=\tilde{\boldsymbol{\mu}}_t\left(\mathbf{x}_t, \frac{1}{\sqrt{\bar{\alpha}_t}}\left(\mathbf{x}_t-\sqrt{1-\bar{\alpha}_t} \epsilon_\theta\left(\mathbf{x}_t\right)\right)\right)=\frac{1}{\sqrt{\alpha_t}}\left(\mathbf{x}_t-\frac{\beta_t}{\sqrt{1-\bar{\alpha}_t}} \boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t\right)\right).
+\end{equation}\]
+
+<p>In this parameterization, the neural network will be used to approximate the \(\epsilon_\theta\) instead of \(\mu_\theta\) directly.
+This parameterization further simplify \(L_{t-1}\) in Eq. (\ref{eq:lt_mu_t_not_param}) into</p>
+
+\[\begin{equation}
+L_{t-1} = \mathbb{E}_{\mathbf{x}_0, \boldsymbol{\epsilon}}\left[\frac{\beta_t^2}{2 \sigma_t^2 \alpha_t\left(1-\bar{\alpha}_t\right)}\left\|\boldsymbol{\epsilon}-\boldsymbol{\epsilon}_\theta\left(\sqrt{\bar{\alpha}_t} \mathbf{x}_0+\sqrt{1-\bar{\alpha}_t} \boldsymbol{\epsilon}, t\right)\right\|^2\right].
+\end{equation}\]
+
+<p>To this point, every term in \(L_\text{VLB}\) can be computed in explicit closed form and is ready for training.
+However, empirically, <a class="citation" href="#ho2020denoising">[2]</a> found that training the diffusion model works better with a simplified objective that ignores the weighting term:</p>
+
+\[\begin{aligned}
+L_t^{\text {simple }} &amp; =\mathbb{E}_{t \sim[1, T], \mathbf{x}_0, \epsilon_t}\left[\left\|\boldsymbol{\epsilon}_t-\boldsymbol{\epsilon}_\theta\left(\mathbf{x}_t, t\right)\right\|^2\right] \\
+&amp; =\mathbb{E}_{t \sim[1, T], \mathbf{x}_0, \epsilon_t}\left[\left\|\boldsymbol{\epsilon}_t-\boldsymbol{\epsilon}_\theta\left(\sqrt{\bar{\alpha}_t} \mathbf{x}_0+\sqrt{1-\bar{\alpha}_t} \boldsymbol{\epsilon}_t, t\right)\right\|^2\right]
+\end{aligned}\]
+
+<p>This simplification enable us to compute arbitrary time steps for each sample \(x_0\), instead of computing the entire series as in \(L_\text{VLB}\).
+The entire DDPM algorithm is show as follows.</p>
+<figure>
+  <img src="../../../assets/img/diffusion-model/ddpm-algo.png" style="width:100%" />
+  <figcaption>Fig.1 - Algorithm of DDPM from <a class="citation" href="#ho2020denoising">[2]</a>. The training process is greatly simplified with the loss function simplification. </figcaption>
+</figure>
+
+<p><strong>Side notes:</strong>
+The timestep is also an input to the neural network \(\epsilon_\theta(x_t, t)\) and it is typically encoded into some vector.
+For instance, in DDPM, integer timesteps are encoded into <a href="https://github.com/hojonathanho/diffusion/blob/master/diffusion_tf/models/unet.py#L99-L103">floats vector through sinusoidal function</a>.</p>
+
+<h1 id="denoising-diffusion-implicit-models-ddim">Denoising Diffusion Implicit Models (DDIM)</h1>
+<p>Though diffusion models like DDPM <a class="citation" href="#ho2020denoising">[2]</a> already demonstrated the ability to produce high quality samples that are comparable with the state-of-the-art generative model, such as GANs, the computation complexity of the sampling process is a critical drawback.
+These diffusion-based models typically require many iterations to produce a high quality sample, whereas models like GANs only need one iteration.
+A quantitative experiment in <a class="citation" href="#song2020denoising">[3]</a> shows that, with same GPU setup and similar neural network complexity, it takes around 20 hours to sample 50k images of size \(32\times 32\) from a DDPM, but less than a minute to do so from a GAN model.
+To resolve this high computational cost without lossing too much generation quality, <a class="citation" href="#song2020denoising">[3]</a>  proposed Denoising Diffusion Implicit Models(DDIM).
+This algorithm is based on two observation/intuitives <a class="citation" href="#kexuefm-9181">[4]</a>.</p>
+
+<ol>
+  <li>
+    <p>The deduction of the loss function only depends on \(q(x_t\mid x_0)\) and the sampling process only depends on \(p_\theta(x_{t-1}\mid x_t)\).
+To be more specific, the loss function remains the same form as long as the relation in Eq. (\ref{eq:xt_x0_relation}) still hold.</p>
+  </li>
+  <li>
+    <p>A DDPM trained on \(\{\alpha_t\}_{t=1}^N\) has, in fact, included the “knowledge” for training a DDPM with \(\{\alpha_\tau\}\subset\{\alpha_t\}_{t=1}^N\).
+This can be naturally observed from training process of the simplified version of loss function.
+It gives us a intuition that we can use a subset of parameters during the sampling process and reduce the computational cost.</p>
+  </li>
+</ol>
+
+<p>Based on the first observation, we can build different conditional distributions \(q(x_t \mid x_{t+1}, x_0)\) that has the same \(q(x_t\mid x_0)\) distribution.
+<strong>Same marginal distribution \(q(x_t\mid x_0)\) results in the same loss function and different choices of conditional distribution \(q(x_t \mid x_{t+1}, x_0)\) results in different sampling choices</strong>.
+In fact, without the constraint of \(q(x_{t+1}\mid x_t)\) as in Eq. (\ref{eq:diff_model_origin}), we have a broader choice(i.e. a larger solution space) of \(q(x_t \mid x_{t+1}, x_0)\).</p>
+
+<p>Based on the second observation, the sampling process can only use a subset of steps used in training process.
+By reducing the updating steps, the sampling process can greatly speed-up.</p>
+
+<h2 id="non-markovian-forward-processes">Non-Markovian Forward Processes</h2>
+<p>The key observation here is that the DDPM loss function only deppends on the marginals \(q(x_t\mid x_0)\), but not directly on the joint distribution \(q(x_{1:T}\mid x_0)\) or transition distribution \(q(x_t\mid x_{t-1})\).
+Follow the deduction in <a class="citation" href="#kexuefm-9181">[4]</a>, we can use undetermined coefficient method to compute the form of \(q(x_t\mid x_{t+1}, x_0)\) and we also assume it takes a normal distribution.
+We first summarize the condition as follows:</p>
+
+<ol>
+  <li>
+    <p>To maintain the same loss function, we need the same marginal distribution \(q(x_t\mid x_0)=\mathcal{N}(\sqrt{\bar{\alpha}_t}x_0, (1-\bar{\alpha}_t)\mathbf{I})\).
+The corresponded sampling process formula is \(x_t=\sqrt{\bar{\alpha}_2}x_0+\sqrt{1-\bar{\alpha}_t}\epsilon_1\).</p>
+  </li>
+  <li>
+    <p>Assume \(q(x_{t-1} \mid x_t, x_0)=\mathcal{N}(x_{t-1}; k_t x_t+\lambda_t x_0, \sigma^2\mathbf{I})\), where \(k_t\) and \(\lambda_t\) are coefficient to be decided.
+The sampling process with \(q(x_{t-1} \mid x_t, x_0)\) is \(x_{t-1} = k_t x_t+\lambda_t x_0 + \sigma_t\epsilon_2\).</p>
+  </li>
+</ol>
+
+<p>By combining the marginal distribution \(q(x_t\mid x_0)\) and assumed form of \(q(x_{t-1} \mid x_t, x_0)\), we can compute the marginal distribution of \(x_{t-1}\) as follows,</p>
+
+\[\begin{align}
+x_{t-1} =&amp; k_t x_t + \lambda_t x_0 + \sigma_t \epsilon_2\nonumber\\
+=&amp; k_t(\sqrt{\bar{\alpha}_t}x_0+\sqrt{1-\bar{\alpha}_t}\epsilon_1) + \lambda_t x_0 + \sigma_t \epsilon_2\nonumber \\
+=&amp; (k_t\sqrt{\bar{\alpha_t}}+\lambda_t)x_0 + (k_t\sqrt{1-\bar{\alpha}_t}\epsilon_1+\sigma_t\epsilon_2)\nonumber\\
+=&amp; (k_t\sqrt{\bar{\alpha_t}}+\lambda_t)x_0 + \sqrt{k_t^2(1-\bar{\alpha}_t)+\sigma_t^2}\epsilon.\label{eq:sample_with_undeter_coefs}
+\end{align}\]
+
+<p>Comparing Eq. (\ref{eq:sample_with_undeter_coefs}) with Eq. (\ref{eq:xt_x0_relation}), remember that we need to let the marginal distribution to be the same and \(q(x_{t-1}\mid x_0)=\int_{x_t}q(x_{t-1} \mid x_t, x_0)q(x_t\mid x_0)\mathrm{d}x_t\), we can have the following relation,</p>
+
+\[\begin{align}
+\sqrt{\bar{\alpha}_{t-1}} &amp;= k_t\sqrt{\bar{\alpha_t}}+\lambda_t,\nonumber\\
+\sqrt{1-\bar{\alpha}_{t-1}} &amp;= \sqrt{k_t^2(1-\bar{\alpha}_t)+\sigma_t^2}.\nonumber\\
+\end{align}\]
+
+<p>There are three variables and only two equation, therefore, we can view \(\sigma_t^2\) as a independent variable and solve that</p>
+
+\[\begin{align}
+k_t=&amp;\sqrt{\frac{1-\bar{\alpha}_{t-1}-\sigma^2_t}{1-\bar{\alpha}_{t}}},\\
+\lambda_t=&amp;\sqrt{\bar{\alpha}_{t-1}} - \sqrt{\frac{(1-\bar{\alpha}_{t-1}-\sigma^2_t)\alpha_t}{1-\bar{\alpha}_{t}}}.
+\end{align}\]
+
+<p>Therefore, we can obtain a family \(\mathcal{Q}\) of inference distribution indexed by \(\{\sigma_t\}_{1:T}\),</p>
+
+\[\begin{equation}
+q_\sigma\left(\boldsymbol{x}_{t-1} \mid \boldsymbol{x}_t, \boldsymbol{x}_0\right)=\mathcal{N}\left(\sqrt{\bar{\alpha}_{t-1}} \boldsymbol{x}_0+\sqrt{1-\bar{\alpha}_{t-1}-\sigma_t^2} \cdot \frac{\boldsymbol{x}_t-\sqrt{\bar{\alpha}_t} \boldsymbol{x}_0}{\sqrt{1-\bar{\alpha}_t}}, \sigma_t^2 \boldsymbol{I}\right).
+\end{equation}\]
+
+<p>As a result, in the sampling procedure, the updating formula is,
+\(\begin{equation}
+\boldsymbol{x}_{t-1}=\sqrt{\bar{\alpha}_{t-1}} \underbrace{\left(\frac{\boldsymbol{x}_t-\sqrt{1-\bar{\alpha}_t} \epsilon_\theta^{(t)}\left(\boldsymbol{x}_t\right)}{\sqrt{\bar{\alpha}_t}}\right)}_{\text {"predicted } \boldsymbol{x}_0 \text { " }}+\underbrace{\sqrt{1-\bar{\alpha}_{t-1}-\sigma_t^2} \cdot \epsilon_\theta^{(t)}\left(\boldsymbol{x}_t\right)}_{\text {"direction pointing to } \boldsymbol{x}_t \text { " }}+\underbrace{\sigma_t \epsilon_t}_{\text {random noise }}.
+\end{equation}\)</p>
+
+<p>Comparing with DDPM, this is generalized form of generative processes.
+Since the marginal distribution remains the same, the loss function did not change and the training process is identical.
+This means that we can use this new generative process with a diffusion model trained in DDPM way and, with different level of \(\sigma_t\), we can generate different image with same initial noise.
+Among different choices, \(\sigma_t=0\) is a special case in which the generation process is deterministic given the initial noise.
+This model is called <strong>denoising diffusion implicit model</strong> since it is an implicit probabilistic model and it is trained with the DDPM objective.</p>
+
+<h2 id="accelerate-generation-processes">Accelerate generation processes</h2>
+<p>We need to point out that, in our previous discussion, we did not start with \(q(x_t\mid x_{t-1})\) and the sequence \(\{\alpha_t\}\) determined the model.
+The key observation here is that the training process of DDPM, in its essence, contained the data/processes of training over any subsequence \(\{\alpha_\tau\}\subset\{\alpha_t\}\).
+This can be observed from the loss functions.
+The training process over a set of parameter \(\{\alpha_\tau\}\) is</p>
+
+\[\begin{equation}
+L_{\text {simple }}(\theta):=\mathbb{E}_{\tau, \mathbf{x}_0, \boldsymbol{\epsilon}}\left[\left\|\boldsymbol{\epsilon}-\boldsymbol{\epsilon}_\theta\left(\sqrt{\bar{\alpha}_\tau} \mathbf{x}_0+\sqrt{1-\bar{\alpha}_\tau} \boldsymbol{\epsilon}, \tau\right)\right\|^2\right].
+\end{equation}\]
+
+<p>Therefore, DDPM trained on \(\{\alpha_t\}\) already incorporated information used to train DDPM on \(\{\alpha_\tau\}\subset\{\alpha_t\}\).
+When the size of \(\{\alpha_\tau\}\) is much smaller than \(\{\alpha_t\}\), generating samples with the former parameters set will be much faster.</p>
+
+<h2 id="remarks-on-ddim">Remarks on DDIM</h2>
+<ol>
+  <li><strong>Why don’t we just directly train on \(\{\alpha_\tau\}\) and sample from the model?</strong><br />
+  There might be two considerations for training on T steps but sampling in \(\mathrm{dim}(\tau)\) steps.
+  Firstly, diffusion model trained on more sophisticated setup might improve the model’s capability of generalization.
+  Secondly, use subsequence to speed up is one way of acceleration and there might be other acceleration method with this more sophisticate model.</li>
+  <li><strong>Can we use DDPM and sample with subset of parameters \(\{\alpha_\tau\}\)? What is the purpose of choosing this new family of conditional distribution?</strong><br />
+  For purpose of accelerating sample generation process, one can certainly use DDPM and skip some steps during generation <a class="citation" href="#weng2021diffusion">[5]</a>.
+  However, clearly, the newly proposed distribution family is more flexible and has the potential of generate more diversified samples without any additional cost other than DDPM.
+  As a matter of fact, letting \(\sigma_t^2 = \sqrt{\frac{1-\bar{\alpha}_{t-1}}{1-\bar{\alpha}_{t}}}\beta_t\), the DDIM is equivalent to DDPM’s sampling process.</li>
+  <li><strong>Additional benefit comes with DDIM?</strong><br />
+  DDIM has “consistency” property since the generative process is deterministic.
+  It means that multiple samples conditioned on the same latent variable should have similar hig-level features <a class="citation" href="#weng2021diffusion">[5]</a>.
+  Due to this consistency, DDIM can do semantically meaningful interpolation in the latent variable.</li>
+</ol>
+
+<h1 id="result-comparison-between-ddpm-and-ddim">Result comparison between DDPM and DDIM</h1>
+<p>Experiments in DDPM and DDIM paper have quantitatively and qualitatively examined the images generated. Here we review two aspects: the sampling quality and the interpolation result.</p>
+
+<h2 id="sampling-quality">Sampling quality</h2>
+<p>In DDIM’s experiment, as the following screenshot taken from it shows, the authors compared results of different number of diffusion steps \(\text{dim}(\tau)\) and different level of noise.
+The empirical result is that lower noise level \(\sigma_t^2\), the better image quality generated with accelerated diffusion process.</p>
+
+<figure>
+  <img src="../../../assets/img/diffusion-model/DDIM-result.png" style="width:100%" />
+  <figcaption>Fig.2 - From the empirical observation, using less steps can increase sampling efficiency without loss too much quality. Meanwhile, less noise level $$\sigma_t$$ results in better performance. </figcaption>
+</figure>
+
+<h2 id="interpolation">Interpolation</h2>
+<p>Both DDIM and DDPM examined their performance on interpolation of images.
+They use the forward process as stochastic encoder to generate embeddings \(x_0\rightarrow x_T, x'_0\rightarrow x'_T\).
+Then decoding the interploated latent \(\bar{x}_T=f(x_T, x'_T, \alpha)\) where \(\alpha\) represent interpolation parameter(s).</p>
+<ol>
+  <li>In DDPM, the authors simply use a linear interpolation, i.e. \(\bar{x}_T=\alpha x_T + (1-\alpha)x'_T\).</li>
+  <li>n DDIM, the authors use a spherical linear interpolation,<br />
+\(\boldsymbol{x}_T^{(\alpha)}=\frac{\sin ((1-\alpha) \theta)}{\sin (\theta)} \boldsymbol{x}_T+\frac{\sin (\alpha \theta)}{\sin (\theta)} \boldsymbol{x}_T',\)
+where \(\theta=\mathrm{arccos}\left(\frac{(\boldsymbol{x}_T)^T\boldsymbol{x}'_T}{\|\boldsymbol{x}_T\|\|\boldsymbol{x}_T'\|}\right)\).</li>
+</ol>
+
+<figure>
+  <img src="../../../assets/img/diffusion-model/DDIM-interpolation.png" style="width:100%" />
+  <figcaption>Fig.3 - The result from <a class="citation" href="#song2020denoising">[3]</a> and the deterministic generation strategy lead to consistency property</figcaption>
+</figure>
+
+<h1 id="interesting-reading">Interesting Reading</h1>
+<ul>
+  <li><a href="https://lilianweng.github.io/posts/2021-07-11-diffusion-models/">Lilian Weng’s post on diffusion model</a></li>
+  <li><a href="https://spaces.ac.cn/archives/9181">Spaces.Ac.cn’s post on DDIM</a></li>
+</ul>
+
+<h1 id="references">References</h1>
+<ol class="bibliography"><li><span id="sohl2015deep">[1]J. Sohl-Dickstein, E. Weiss, N. Maheswaranathan, and S. Ganguli, “Deep unsupervised learning using nonequilibrium thermodynamics,” in <i>International Conference on Machine Learning</i>, 2015, pp. 2256–2265. Available at: https://arxiv.org/pdf/1503.03585.pdf</span></li>
+<li><span id="ho2020denoising">[2]J. Ho, A. Jain, and P. Abbeel, “Denoising diffusion probabilistic models,” <i>Advances in Neural Information Processing Systems</i>, vol. 33, pp. 6840–6851, 2020.</span></li>
+<li><span id="song2020denoising">[3]J. Song, C. Meng, and S. Ermon, “Denoising diffusion implicit models,” <i>arXiv preprint arXiv:2010.02502</i>, 2020.</span></li>
+<li><span id="kexuefm-9181">[4]苏剑林, “生成扩散模型漫谈（四）：DDIM = 高观点DDPM.” July 2022. Available at: \urlhttps://kexue.fm/archives/9181</span></li>
+<li><span id="weng2021diffusion">[5]L. Weng, “What are diffusion models?,” <i>lilianweng.github.io</i>, Jul. 2021, Available at: https://lilianweng.github.io/posts/2021-07-11-diffusion-models/</span></li></ol>]]></content><author><name>Xiaozhi(Alan) Zhu</name><email>xiaozhizhu1994@gmail.com</email></author><category term="ML" /><category term="CV" /><category term="Diffusion Model" /><summary type="html"><![CDATA[Comprehensive mathematical introduction to diffusion models, covering DDPM fundamentals including forward/reverse processes, variational lower bounds, loss function derivations, and DDIM's non-Markovian processes for accelerated sampling with theoretical foundations and experimental comparisons.]]></summary></entry></feed>
