@@ -28,3 +28,16 @@ scholar:
   source: /_bibliography/
   bibliography: papers.bib
   link-bibliography: true
+
+giscus:
+  repo: xiaozhi-alan-zhu/xiaozhi-alan-zhu.github.io
+  repo-id: R_kgDOP1cUIg
+  category: General
+  category-id: DIC_kwDOP1cUIs4Cv4rp
+  mapping: pathname
+  strict: 0
+  reactions: 1
+  emit: 0
+  input: bottom
+  theme: noborder_light
+  lang: en
