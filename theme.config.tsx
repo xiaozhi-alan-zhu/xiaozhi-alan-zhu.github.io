@@ -13,6 +13,9 @@ const config: DocsThemeConfig = {
     footer: {
         text: '© 2024 Xiaozhi (Alan) Zhu',
     },
+    useNextSeoProps: () => ({
+        titleTemplate: '%s – Xiaozhi (Alan) Zhu'
+    }),
 }
 
 export default config
