@@ -15,7 +15,7 @@ This post summarizes the fundamental concepts of diffusion models, their optimiz
 
 # Denoising Diffusion Probabilistic Models (DDPM)
 
-Diffusion models are a class of generative models first proposed by Sohl-Dickstein et al. Inspired by nonequilibrium thermodynamics, the method systematically and gradually destroys data structure through a forward diffusion process, then learns a reverse process to restore structure and yield a highly flexible and tractable generative model.
+Diffusion models are a class of generative models first proposed by Sohl-Dickstein et al. [@sohl2015deep]. Inspired by nonequilibrium thermodynamics, the method systematically and gradually destroys data structure through a forward diffusion process, then learns a reverse process to restore structure and yield a highly flexible and tractable generative model.
 
 ## Forward Process
 
@@ -35,7 +35,7 @@ $$
 2. After sufficient diffusion steps, the final state $$x_T$$ approaches an isotropic Gaussian distribution when $$T$$ is large enough.
 3. For clarity, we use $$p_\theta$$ to represent the learned distribution and $$q$$ to represent the real data distribution.
 
-A notable property of this forward process, as mentioned in Ho et al. (Section 2), is that $$x_t$$ has a closed-form expression derived using the [reparameterization trick](https://gregorygundersen.com/blog/2018/04/29/reparameterization/). Let $$\alpha_t = 1-\beta_t$$ and $$\bar{\alpha}_t = \prod_{i=1}^t\alpha_i$$:
+A notable property of this forward process, as mentioned in Ho et al. [@ho2020denoising] (Section 2), is that $$x_t$$ has a closed-form expression derived using the [reparameterization trick](https://gregorygundersen.com/blog/2018/04/29/reparameterization/). Let $$\alpha_t = 1-\beta_t$$ and $$\bar{\alpha}_t = \prod_{i=1}^t\alpha_i$$:
 
 $$
 \begin{align}
@@ -101,7 +101,7 @@ $$
 \end{align*}
 $$
 
-To convert each term in the equation to be analytically computable, the objective can be further rewritten to be a combination of several KL-divergence and entropy terms (See the detailed step-by-step process in Appendix B in Sohl-Dickstein et al.):
+To convert each term in the equation to be analytically computable, the objective can be further rewritten to be a combination of several KL-divergence and entropy terms (See the detailed step-by-step process in Appendix B in Sohl-Dickstein et al. [@sohl2015deep]):
 
 $$
 \begin{aligned}
@@ -186,7 +186,7 @@ L_{t-1}=\mathbb{E}_q\left[\frac{1}{2 \sigma_t^2}\left\|\tilde{\boldsymbol{\mu}}_
 \end{equation}
 $$
 
-Furthermore, $$\mu_\theta$$ is further parameterized in section 3.2 of Ho et al. to be corresponded with the form of $$\tilde{\mu}_t$$ in Eq. (\ref{eq:standard_form_mu_t}) as follows,
+Furthermore, $$\mu_\theta$$ is further parameterized in section 3.2 of Ho et al. [@ho2020denoising] to be corresponded with the form of $$\tilde{\mu}_t$$ in Eq. (\ref{eq:standard_form_mu_t}) as follows,
 
 $$
 \begin{equation}
@@ -204,7 +204,7 @@ L_{t-1} = \mathbb{E}_{\mathbf{x}_0, \boldsymbol{\epsilon}}\left[\frac{\beta_t^2}
 $$
 
 To this point, every term in $$L_\text{VLB}$$ can be computed in explicit closed form and is ready for training.
-However, empirically, Ho et al. found that training the diffusion model works better with a simplified objective that ignores the weighting term:
+However, empirically, Ho et al. [@ho2020denoising] found that training the diffusion model works better with a simplified objective that ignores the weighting term:
 
 $$
 \begin{aligned}
@@ -217,7 +217,7 @@ This simplification enable us to compute arbitrary time steps for each sample $$
 The entire DDPM algorithm is show as follows.
 <figure>
   <img src="/assets/img/diffusion-model/ddpm-algo.png" style={{width: '100%'}} />
-  <figcaption>Fig.1 - Algorithm of DDPM from Ho et al. The training process is greatly simplified with the loss function simplification. </figcaption>
+  <figcaption>Fig.1 - Algorithm of DDPM from Ho et al. [@ho2020denoising]. The training process is greatly simplified with the loss function simplification. </figcaption>
 </figure>
 
 **Side notes:**
@@ -228,8 +228,8 @@ For instance, in DDPM, integer timesteps are encoded into [floats vector through
 # Denoising Diffusion Implicit Models (DDIM)
 Though diffusion models like DDPM already demonstrated the ability to produce high quality samples that are comparable with the state-of-the-art generative model, such as GANs, the computation complexity of the sampling process is a critical drawback.
 These diffusion-based models typically require many iterations to produce a high quality sample, whereas models like GANs only need one iteration.
-A quantitative experiment in Song et al. shows that, with same GPU setup and similar neural network complexity, it takes around 20 hours to sample 50k images of size $$32\times 32$$ from a DDPM, but less than a minute to do so from a GAN model.
-To resolve this high computational cost without lossing too much generation quality, Song et al.  proposed Denoising Diffusion Implicit Models(DDIM).
+A quantitative experiment in Song et al. [@song2020denoising] shows that, with same GPU setup and similar neural network complexity, it takes around 20 hours to sample 50k images of size $$32\times 32$$ from a DDPM, but less than a minute to do so from a GAN model.
+To resolve this high computational cost without lossing too much generation quality, Song et al. [@song2020denoising] proposed Denoising Diffusion Implicit Models(DDIM).
 This algorithm is based on two observation/intuitives.
 
 1. The deduction of the loss function only depends on $$q(x_t\mid x_0)$$ and the sampling process only depends on $$p_\theta(x_{t-1}\mid x_t)$$.
@@ -363,7 +363,7 @@ where $$\theta=\mathrm{arccos}\left(\frac{(\boldsymbol{x}_T)^T\boldsymbol{x}'_T}
 
 <figure>
   <img src="/assets/img/diffusion-model/DDIM-interpolation.png" style={{width: '100%'}} />
-  <figcaption>Fig.3 - The result from Song et al. and the deterministic generation strategy lead to consistency property</figcaption>
+  <figcaption>Fig.3 - The result from Song et al. [@song2020denoising] and the deterministic generation strategy lead to consistency property</figcaption>
 </figure>
 
 
@@ -373,6 +373,6 @@ where $$\theta=\mathrm{arccos}\left(\frac{(\boldsymbol{x}_T)^T\boldsymbol{x}'_T}
 
 
 # References
-(Citations removed for brevity, check original papers)
+
 
 <Comments />
