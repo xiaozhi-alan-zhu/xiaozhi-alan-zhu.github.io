@@ -1,4 +1,3 @@
-```javascript
 module.exports = async () => {
     const remarkMath = (await import('remark-math')).default
     const rehypeKatex = (await import('rehype-katex')).default
@@ -11,9 +10,9 @@ module.exports = async () => {
         mdxOptions: {
             remarkPlugins: [remarkMath],
             rehypePlugins: [
-                [rehypeKatex, { 
-                    trust: true, 
-                    strict: false, 
+                [rehypeKatex, {
+                    trust: true,
+                    strict: false,
                     output: 'html', // Use HTML output for better compatibility
                     macros: {
                         "\\eqref": "\\href{##1}{(\\text{#1})}",
@@ -33,4 +32,3 @@ module.exports = async () => {
         }
     })
 }
-```
