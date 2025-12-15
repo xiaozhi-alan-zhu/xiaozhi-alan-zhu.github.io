@@ -1,0 +1,71 @@
+---
+type: page
+searchable: false
+---
+
+import { PostList } from '../../components/PostList'
+import fs from 'fs'
+import path from 'path'
+import matter from 'gray-matter'
+import { useRouter } from 'next/router'
+
+export const getStaticPaths = async () => {
+  const postsDirectory = path.join(process.cwd(), 'pages/posts')
+  const filenames = fs.readdirSync(postsDirectory)
+
+  const tags = new Set()
+  filenames.forEach(filename => {
+    if (!filename.endsWith('.md') && !filename.endsWith('.mdx')) return
+    const filePath = path.join(postsDirectory, filename)
+    const fileContents = fs.readFileSync(filePath, 'utf8')
+    const { data } = matter(fileContents)
+    if (data.tags) {
+      data.tags.forEach(tag => tags.add(tag))
+    }
+  })
+
+  const paths = Array.from(tags).map(tag => ({
+    params: { tag }
+  }))
+
+  return {
+    paths,
+    fallback: false
+  }
+}
+
+export const getStaticProps = async ({ params }) => {
+  const postsDirectory = path.join(process.cwd(), 'pages/posts')
+  const filenames = fs.readdirSync(postsDirectory)
+
+  const posts = filenames
+    .filter(filename => filename.endsWith('.md') || filename.endsWith('.mdx'))
+    .filter(filename => filename !== 'index.mdx')
+    .map(filename => {
+      const filePath = path.join(postsDirectory, filename)
+      const fileContents = fs.readFileSync(filePath, 'utf8')
+      const { data } = matter(fileContents)
+
+      // Serialize date
+      if (data.date instanceof Date) {
+        data.date = data.date.toISOString().split('T')[0]
+      }
+      
+      return {
+        frontMatter: data,
+        route: '/posts/' + filename.replace(/\.mdx?$/, '')
+      }
+    })
+    .filter(post => post.frontMatter.tags && post.frontMatter.tags.includes(params.tag))
+
+  return {
+    props: {
+      posts,
+      tag: params.tag
+    }
+  }
+}
+
+<h1>Posts tagged with "{props.tag}"</h1>
+
+<PostList posts={props.posts} />

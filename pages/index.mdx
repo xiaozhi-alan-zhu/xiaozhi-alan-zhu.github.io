@@ -1,0 +1,49 @@
+
+import styles from '../styles/home.module.css'
+
+<div className={styles.container}>
+  <div className={styles.grid}>
+    <aside className={styles.sidebar}>
+      <img className={styles.avatar} src="/assets/images/photo.png" alt="Profile photo" />
+      <h1 className={styles.name}>Xiaozhi(Alan) Zhu</h1>
+      <div className={styles.affiliation}>Applied mathematician, AI researcher</div>
+
+      <ul className={styles.contact}>
+        <li>
+          <span className={styles.icon}>📍</span> Redmond, WA
+        </li>
+        <li>
+          <span className={styles.icon}>✉️</span> 
+          <a href="mailto:xiaozhizhu1994@gmail.com">xiaozhizhu1994@gmail.com</a>
+        </li>
+        <li>
+          <span className={styles.icon}>🎓</span> 
+          <a href="https://scholar.google.com/citations?user=SCHOLAR_ID&user=476oUoEAAAAJ" target="_blank" rel="noopener noreferrer">Google Scholar</a>
+        </li>
+        <li>
+          <span className={styles.icon}>🐙</span> 
+          <a href="https://github.com/xiaozhi-alan-zhu" target="_blank" rel="noopener noreferrer">GitHub</a>
+        </li>
+      </ul>
+    </aside>
+
+    <section className={styles.main}>
+      <h2 className={styles.sectionTitle}>Biography</h2>
+      <p className={styles.bio}>
+        My name is Xiaozhi(Alan) Zhu and I’m currently a research scientist at Meta Platform, inc.
+        Before joining Meta, I obtained my Ph.D. in <a href="https://acms.nd.edu/" target="_blank" rel="noopener noreferrer">applied math from University of Notre Dame</a> with <a href="https://www3.nd.edu/~yzhang10/" target="_blank" rel="noopener noreferrer">Prof. Yong-tao Zhang</a> being my advisor.
+        My research interests focusing on numerical PDE, ML for physics simulation and related topics.
+      </p>
+
+      <div style={{ margin: '3rem 0' }}></div>
+
+      <h2 className={styles.sectionTitle}>News</h2>
+      <ul className={styles.newsList}>
+        <li className={styles.newsItem}>
+          <span className={styles.newsDate}>2025.08</span>
+          <span className={styles.newsContent}>Create this website.</span>
+        </li>
+      </ul>
+    </section>
+  </div>
+</div>

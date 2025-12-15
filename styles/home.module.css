@@ -1,0 +1,238 @@
+/* Container for the home page */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: #333;
+}
+
+/* Grid layout for Sidebar and Main Content */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 3rem;
+}
+
+@media (min-width: 768px) {
+  .grid {
+    grid-template-columns: 300px 1fr;
+    align-items: start;
+  }
+}
+
+/* Sidebar Styling */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(10px);
+  padding: 2rem;
+  border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.05); /* Light border for glass effect */
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.avatar {
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 4px solid #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  margin-bottom: 1.5rem;
+  transition: transform 0.3s ease;
+}
+
+.avatar:hover {
+  transform: scale(1.05);
+}
+
+.name {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  background: linear-gradient(120deg, #2563eb, #9333ea);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.affiliation {
+  font-size: 1rem;
+  color: #555;
+  margin-bottom: 1.5rem;
+  font-weight: 500;
+}
+
+.contact {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  text-align: left;
+}
+
+.contact li {
+  margin-bottom: 0.8rem;
+  display: flex;
+  align-items: center;
+  font-size: 0.95rem;
+  color: #444;
+}
+
+.contact li a {
+  color: #444;
+  text-decoration: none;
+  transition: color 0.2s;
+  margin-left: 0.5rem;
+}
+
+.contact li a:hover {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.icon {
+  margin-right: 0.5rem;
+  width: 20px;
+  text-align: center;
+  display: inline-block;
+}
+
+/* Main Content Styling */
+.main {
+  background: rgba(255, 255, 255, 0.8); /* Slightly more opaque */
+  padding: 0; /* Let content breathe, or add padding if card style desired */
+}
+
+/* Section Titles */
+.sectionTitle {
+  font-size: 2rem;
+  font-weight: 800;
+  margin-bottom: 1.5rem;
+  position: relative;
+  display: inline-block;
+  color: #111;
+}
+
+.sectionTitle::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -5px;
+  width: 40px;
+  height: 4px;
+  background: #2563eb;
+  border-radius: 2px;
+}
+
+.bio {
+  font-size: 1.1rem;
+  line-height: 1.7;
+  color: #333;
+  margin-bottom: 3rem;
+}
+
+.bio a {
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 500;
+  border-bottom: 1px dotted #2563eb;
+  transition: all 0.2s;
+}
+
+.bio a:hover {
+  background: rgba(37, 99, 235, 0.1);
+  border-bottom: 1px solid #2563eb;
+}
+
+/* News Section */
+.newsList {
+  list-style: none;
+  padding: 0;
+  position: relative;
+  border-left: 2px solid #e5e7eb;
+  margin-left: 10px;
+}
+
+.newsItem {
+  margin-bottom: 1.5rem;
+  position: relative;
+  padding-left: 2rem;
+}
+
+.newsItem::before {
+  content: '';
+  position: absolute;
+  left: -6px; /* Center over the line: -2px for line width/2 + -4px for dot radius? No: line is at 0. Dot is 10px. left: -5px center. Line is 2px. left -4px */
+  top: 8px; /* align with text */
+  width: 10px;
+  height: 10px;
+  background: #fff;
+  border: 2px solid #2563eb;
+  border-radius: 50%;
+}
+
+.newsDate {
+  font-weight: 700;
+  color: #2563eb;
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.newsContent {
+  color: #374151;
+  line-height: 1.5;
+}
+
+/* Dark mode overrides (naive implementation, assumes data-theme or prefers-color-scheme if supported by parent class, but Nextra handles dark mode on body usually) */
+/* We can use CSS variables provided by Nextra or specific dark classes */
+:global(.dark) .container {
+  color: #f3f4f6;
+}
+:global(.dark) .sidebar {
+  background: rgba(30, 30, 30, 0.6);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+:global(.dark) .avatar {
+  border-color: #333;
+}
+:global(.dark) .name {
+  background: linear-gradient(120deg, #60a5fa, #c084fc);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+:global(.dark) .contact li a {
+  color: #d1d5db;
+}
+:global(.dark) .contact li a:hover {
+  color: #60a5fa;
+}
+:global(.dark) .sectionTitle {
+  color: #f3f4f6;
+}
+:global(.dark) .bio {
+  color: #d1d5db;
+}
+:global(.dark) .bio a {
+  color: #60a5fa;
+  border-bottom-color: #60a5fa;
+}
+:global(.dark) .newsList {
+  border-left-color: #374151;
+}
+:global(.dark) .newsItem::before {
+  background: #111;
+  border-color: #60a5fa;
+}
+:global(.dark) .newsDate {
+  color: #60a5fa;
+}
+:global(.dark) .newsContent {
+  color: #d1d5db;
+}
