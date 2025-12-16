@@ -122,8 +122,8 @@ In summary, we can split the variational lower bound into $$(T+1)$$ components a
 $$
 \begin{aligned}
 L_{\mathrm{VLB}} & =L_T+L_{T-1}+\cdots+L_0 \\
-\text { where } L_T & =D_{\mathrm{KL}}\left(q\left(\mathbf{x}_T \mid \mathbf{x}_0\right) \| p_\theta\left(\mathbf{x}_T\right)\right), \\
-L_t & =D_{\mathrm{KL}}\left(q\left(\mathbf{x}_t \mid \mathbf{x}_{t+1}, \mathbf{x}_0\right) \| p_\theta\left(\mathbf{x}_t \mid \mathbf{x}_{t+1}\right)\right) \text { for } 1 \leq t \leq T-1, \\
+\text{ where } L_T & =D_{\mathrm{KL}}\left(q\left(\mathbf{x}_T \mid \mathbf{x}_0\right) \| p_\theta\left(\mathbf{x}_T\right)\right), \\
+L_t & =D_{\mathrm{KL}}\left(q\left(\mathbf{x}_t \mid \mathbf{x}_{t+1}, \mathbf{x}_0\right) \| p_\theta\left(\mathbf{x}_t \mid \mathbf{x}_{t+1}\right)\right) \text{ for } 1 \leq t \leq T-1, \\
 L_0 & =-\log p_\theta\left(\mathbf{x}_0 \mid \mathbf{x}_1\right).
 \end{aligned}
 $$
@@ -172,7 +172,7 @@ The loss term $$L_t$$ become
 
 $$
 \begin{align}
-L_t =& D_{\mathrm{KL}}\left(q\left(\mathbf{x}_t \mid \mathbf{x}_{t+1}, \mathbf{x}_0\right) \| p_\theta\left(\mathbf{x}_t \mid \mathbf{x}_{t+1}\right)\right)$ \nonumber\\
+L_t =& D_{\mathrm{KL}}\left(q\left(\mathbf{x}_t \mid \mathbf{x}_{t+1}, \mathbf{x}_0\right) \| p_\theta\left(\mathbf{x}_t \mid \mathbf{x}_{t+1}\right)\right) \nonumber\\
 =& \frac{1}{2}\left[\log\frac{| \boldsymbol{\Sigma}_\theta\left(\mathbf{x}_t, t\right)|}{|\tilde{\beta}_t \mathbf{I}|}+(\tilde{\mu}_t-\mu_\theta)^T\boldsymbol{\Sigma}_\theta\left(\mathbf{x}_t, t\right)^{-1}(\tilde{\mu}_t-\mu_\theta)+\text{tr}\left\{\boldsymbol{\Sigma}_\theta\left(\mathbf{x}_t, t\right)^{-1}\tilde{\beta}_t \mathbf{I}\right\}\right].\label{eq:lt_before_simple_sigma}
 \end{align}
 $$
@@ -298,7 +298,7 @@ $$
 As a result, in the sampling procedure, the updating formula is,
 $$
 \begin{equation}
-\boldsymbol{x}_{t-1}=\sqrt{\bar{\alpha}_{t-1}} \underbrace{\left(\frac{\boldsymbol{x}_t-\sqrt{1-\bar{\alpha}_t} \epsilon_\theta^{(t)}\left(\boldsymbol{x}_t\right)}{\sqrt{\bar{\alpha}_t}}\right)}_{\text {"predicted } \boldsymbol{x}_0 \text { " }}+\underbrace{\sqrt{1-\bar{\alpha}_{t-1}-\sigma_t^2} \cdot \epsilon_\theta^{(t)}\left(\boldsymbol{x}_t\right)}_{\text {"direction pointing to } \boldsymbol{x}_t \text { " }}+\underbrace{\sigma_t \epsilon_t}_{\text {random noise }}.
+\boldsymbol{x}_{t-1}=\sqrt{\bar{\alpha}_{t-1}} \underbrace{\left(\frac{\boldsymbol{x}_t-\sqrt{1-\bar{\alpha}_t} \epsilon_\theta^{(t)}\left(\boldsymbol{x}_t\right)}{\sqrt{\bar{\alpha}_t}}\right)}_{\text{"predicted } \boldsymbol{x}_0 \text{ " }}+\underbrace{\sqrt{1-\bar{\alpha}_{t-1}-\sigma_t^2} \cdot \epsilon_\theta^{(t)}\left(\boldsymbol{x}_t\right)}_{\text{"direction pointing to } \boldsymbol{x}_t \text{ " }}+\underbrace{\sigma_t \epsilon_t}_{\text{random noise }}.
 \end{equation}
 $$
 
