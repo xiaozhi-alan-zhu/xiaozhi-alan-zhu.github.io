@@ -11,12 +11,12 @@ module.exports = async () => {
             remarkPlugins: [remarkMath],
             rehypePlugins: [
                 [rehypeKatex, {
-                    trust: true,
+                    trust: (context) => ['\\htmlId', '\\href'].includes(context.command),
                     strict: false,
                     output: 'html',
                     macros: {
-                        "\\eqref": "\\href{##1}{(\\text{#1})}",
-                        "\\ref": "\\href{##1}{\\text{#1}}",
+                        "\\eqref": "\\href{\\##1}{(\\text{#1})}",
+                        "\\ref": "\\href{\\##1}{\\text{#1}}",
                         "\\label": "\\htmlId{#1}{}"
                     }
                 }],

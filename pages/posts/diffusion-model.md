@@ -64,7 +64,7 @@ q(\mathbf{x}_{t-1}|\mathbf{x}_t)=\frac{q(\mathbf{x}_{t-1},\mathbf{x}_t)}{q(\math
 \end{equation}
 $$
 
-Computing $$q(x_{t-1} \mid x_t)$$ requires evaluating integrals in Eq. (\ref{eq:imprac_cond_prob_expr}), which is computationally expensive. Instead, we use the diffusion model $$p_\theta(x_{t-1} \mid x_t)$$ to learn and approximate the true conditional distribution. When $$\beta_t$$ is sufficiently small, $$q(x_{t-1} \mid x_t)$$ is also Gaussian ([details](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/#reverse-diffusion-process)).
+Computing $$q(x_{t-1} \mid x_t)$$ requires evaluating integrals in Eq. ($\ref{eq:imprac_cond_prob_expr}$), which is computationally expensive. Instead, we use the diffusion model $$p_\theta(x_{t-1} \mid x_t)$$ to learn and approximate the true conditional distribution. When $$\beta_t$$ is sufficiently small, $$q(x_{t-1} \mid x_t)$$ is also Gaussian ([details](https://lilianweng.github.io/posts/2021-07-11-diffusion-models/#reverse-diffusion-process)).
 
 The joint distribution of the diffusion model is:
 
@@ -129,7 +129,7 @@ L_0 & =-\log p_\theta\left(\mathbf{x}_0 \mid \mathbf{x}_1\right).
 $$
 
 In the above decomposition:
-1. $$q(x_T \mid x_0)$$ can be computed from Eq. (\ref{eq:xt_x0_relation})
+1. $$q(x_T \mid x_0)$$ can be computed from Eq. ($\ref{eq:xt_x0_relation}$)
 2. $$p_\theta(x_t \mid x_{t+1})$$ are parameterized and learned
 
 Next, we show that $$q\left(\mathbf{x}_t \mid \mathbf{x}_{t+1}, \mathbf{x}_0 \right)$$ can be computed in closed form even though $$q\left(\mathbf{x}_t \mid \mathbf{x}_{t+1} \right)$$ can't.
@@ -154,7 +154,7 @@ $$
 \end{align}
 $$
 
-Recall the relation between $$x_t$$ and $$x_0$$ deduced from Eq. \ref{eq:xt_x0_relation}, the Eq. \ref{eq:standard_form_mu_t} can be further rewrited as follows:
+Recall the relation between $$x_t$$ and $$x_0$$ deduced from Eq. $\ref{eq:xt_x0_relation}$, the Eq. $\ref{eq:standard_form_mu_t}$ can be further rewrited as follows:
 
 $$
 \begin{aligned}
@@ -186,7 +186,7 @@ L_{t-1}=\mathbb{E}_q\left[\frac{1}{2 \sigma_t^2}\left\|\tilde{\boldsymbol{\mu}}_
 \end{equation}
 $$
 
-Furthermore, $$\mu_\theta$$ is further parameterized in section 3.2 of Ho et al. [@ho2020denoising] to be corresponded with the form of $$\tilde{\mu}_t$$ in Eq. (\ref{eq:standard_form_mu_t}) as follows,
+Furthermore, $$\mu_\theta$$ is further parameterized in section 3.2 of Ho et al. [@ho2020denoising] to be corresponded with the form of $$\tilde{\mu}_t$$ in Eq. ($\ref{eq:standard_form_mu_t}$) as follows,
 
 $$
 \begin{equation}
@@ -195,7 +195,7 @@ $$
 $$
 
 In this parameterization, the neural network will be used to approximate the $$\epsilon_\theta$$ instead of $$\mu_\theta$$ directly.
-This parameterization further simplify $$L_{t-1}$$ in Eq. (\ref{eq:lt_mu_t_not_param}) into
+This parameterization further simplify $$L_{t-1}$$ in Eq. ($\ref{eq:lt_mu_t_not_param}$) into
 
 $$
 \begin{equation}
@@ -233,7 +233,7 @@ To resolve this high computational cost without lossing too much generation qual
 This algorithm is based on two observation/intuitives.
 
 1. The deduction of the loss function only depends on $$q(x_t\mid x_0)$$ and the sampling process only depends on $$p_\theta(x_{t-1}\mid x_t)$$.
-To be more specific, the loss function remains the same form as long as the relation in Eq. (\ref{eq:xt_x0_relation}) still hold.
+To be more specific, the loss function remains the same form as long as the relation in Eq. ($\ref{eq:xt_x0_relation}$) still hold.
 
 2. A DDPM trained on $$\{\alpha_t\}_{t=1}^N$$ has, in fact, included the "knowledge" for training a DDPM with $$\{\alpha_\tau\}\subset\{\alpha_t\}_{t=1}^N$$.
 This can be naturally observed from training process of the simplified version of loss function.
@@ -241,7 +241,7 @@ It gives us a intuition that we can use a subset of parameters during the sampli
 
 Based on the first observation, we can build different conditional distributions $$q(x_t \mid x_{t+1}, x_0)$$ that has the same $$q(x_t\mid x_0)$$ distribution.
 **Same marginal distribution $$q(x_t\mid x_0)$$ results in the same loss function and different choices of conditional distribution $$q(x_t \mid x_{t+1}, x_0)$$ results in different sampling choices**.
-In fact, without the constraint of $$q(x_{t+1}\mid x_t)$$ as in Eq. (\ref{eq:diff_model_origin}), we have a broader choice(i.e. a larger solution space) of $$q(x_t \mid x_{t+1}, x_0)$$.
+In fact, without the constraint of $$q(x_{t+1}\mid x_t)$$ as in Eq. ($\ref{eq:diff_model_origin}$), we have a broader choice(i.e. a larger solution space) of $$q(x_t \mid x_{t+1}, x_0)$$.
 
 Based on the second observation, the sampling process can only use a subset of steps used in training process.
 By reducing the updating steps, the sampling process can greatly speed-up.
@@ -269,7 +269,7 @@ x_{t-1} =& k_t x_t + \lambda_t x_0 + \sigma_t \epsilon_2\nonumber\\
 \end{align}
 $$
 
-Comparing Eq. (\ref{eq:sample_with_undeter_coefs}) with Eq. (\ref{eq:xt_x0_relation}), remember that we need to let the marginal distribution to be the same and $$q(x_{t-1}\mid x_0)=\int_{x_t}q(x_{t-1} \mid x_t, x_0)q(x_t\mid x_0)\mathrm{d}x_t$$, we can have the following relation,
+Comparing Eq. ($\ref{eq:sample_with_undeter_coefs}$) with Eq. ($\ref{eq:xt_x0_relation}$), remember that we need to let the marginal distribution to be the same and $$q(x_{t-1}\mid x_0)=\int_{x_t}q(x_{t-1} \mid x_t, x_0)q(x_t\mid x_0)\mathrm{d}x_t$$, we can have the following relation,
 
 $$
 \begin{align}
