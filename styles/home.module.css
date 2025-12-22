@@ -31,7 +31,8 @@
   backdrop-filter: blur(10px);
   padding: 2rem;
   border-radius: 16px;
-  border: 1px solid rgba(0, 0, 0, 0.05); /* Light border for glass effect */
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  /* Light border for glass effect */
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
@@ -103,8 +104,10 @@
 
 /* Main Content Styling */
 .main {
-  background: rgba(255, 255, 255, 0.8); /* Slightly more opaque */
-  padding: 0; /* Let content breathe, or add padding if card style desired */
+  background: rgba(255, 255, 255, 0.8);
+  /* Slightly more opaque */
+  padding: 0;
+  /* Let content breathe, or add padding if card style desired */
 }
 
 /* Section Titles */
@@ -166,8 +169,10 @@
 .newsItem::before {
   content: '';
   position: absolute;
-  left: -6px; /* Center over the line: -2px for line width/2 + -4px for dot radius? No: line is at 0. Dot is 10px. left: -5px center. Line is 2px. left -4px */
-  top: 8px; /* align with text */
+  left: -6px;
+  /* Center over the line: -2px for line width/2 + -4px for dot radius? No: line is at 0. Dot is 10px. left: -5px center. Line is 2px. left -4px */
+  top: 8px;
+  /* align with text */
   width: 10px;
   height: 10px;
   background: #fff;
@@ -195,44 +200,56 @@
 :global(.dark) .container {
   color: #f3f4f6;
 }
+
 :global(.dark) .sidebar {
   background: rgba(30, 30, 30, 0.6);
   border-color: rgba(255, 255, 255, 0.1);
 }
+
 :global(.dark) .avatar {
   border-color: #333;
 }
+
 :global(.dark) .name {
   background: linear-gradient(120deg, #60a5fa, #c084fc);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
+
 :global(.dark) .contact li a {
   color: #d1d5db;
 }
+
 :global(.dark) .contact li a:hover {
   color: #60a5fa;
 }
+
 :global(.dark) .sectionTitle {
   color: #f3f4f6;
 }
+
 :global(.dark) .bio {
   color: #d1d5db;
 }
+
 :global(.dark) .bio a {
   color: #60a5fa;
   border-bottom-color: #60a5fa;
 }
+
 :global(.dark) .newsList {
   border-left-color: #374151;
 }
+
 :global(.dark) .newsItem::before {
   background: #111;
   border-color: #60a5fa;
 }
+
 :global(.dark) .newsDate {
   color: #60a5fa;
 }
+
 :global(.dark) .newsContent {
   color: #d1d5db;
 }
