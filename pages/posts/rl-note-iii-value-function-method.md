@@ -1,0 +1,153 @@
+---
+title: Reinforcement Learning Notes (III) -- Value Function Methods
+description: Minimal introduction to value function methods
+date: 2025-12-25
+tags: [reinforcement-learning, value-function-method]
+# draft: true
+---
+
+## 1. Introduction: From Actor-Critic to Value-Based RL
+
+In Actor-Critic methods, we learned two functions: a policy $\pi_\theta$ (actor) and a value function $V_\phi$ (critic).
+**Value-Based Methods** ask: *Can we omit the explicit policy entirely?*
+
+The core idea is to define the policy **implicitly** using the value function. If we know the optimal value function $Q^*(s, a)$, the optimal policy is simply to establish the "greedy" action at every step:
+
+$$
+\pi^*(s) = \arg\max_a Q^*(s, a)
+$$
+
+This guarantees the policy is at least as good as the one that generated the values.
+
+
+
+## 2. Foundations & Definitions
+
+To understand Value-Based RL, we must rigorously define our objective and the equations we solve.
+
+### 2.1 The Objective: Optimal Value
+We define $Q^*(s, a)$ as the **maximum expected total discounted reward** starting from state $s$, taking action $a$, and acting optimally thereafter:
+
+$$
+Q^*(s, a) = \max_\pi E_\pi \left[ \sum_{t=0}^\infty \gamma^t r_t \bigg| s_0=s, a_0=a \right]
+$$
+
+### 2.2 The Recursive Logic (Bellman Equation)
+This definition implies a recursive relationship. The value of the current step is the immediate reward plus the discounted value of the best possible future.
+
+**Why is $V^*(s') = \max_{a'} Q^*(s', a')$?**
+
+Since $V^*(s')$ represents the value of being in state $s'$ and acting optimally thereafter, the agent will choose the action $a'$ that maximizes the expected return. Thus, the value of the state is the specific value of the best action available in that state.
+
+**Bellman Optimality Equation:**
+
+$$
+Q^*(s, a) = E_{s' \sim p(\cdot|s,a)} \left[ r(s, a) + \gamma \underbrace{\max_{a'} Q^*(s', a')}_{V^*(s')} \right]
+$$
+
+### 2.3 Requirements for Validity
+For this recursive equation to hold, we assume:
+1.  **Markov Property:** Future depends only on $s$, not history.
+2.  **Stationarity:** Dynamics $p(s'|s,a)$ and rewards $r(s,a)$ are constant.
+3.  **Discounting ($\gamma < 1$):** Ensures finite sums and convergence (contraction).
+
+
+
+## 3. Model-Based vs. Model-Free Learning
+
+### 3.1 Policy Iteration (Model-Based)
+If we know the transition dynamics $p(s'|s,a)$, we can use Dynamic Programming.
+1.  **Evaluate:** Compute $V^\pi(s)$ for current $\pi$.
+2.  **Improve:** Update $\pi(s) \leftarrow \arg\max_a E_{s'}[r + \gamma V^\pi(s')]$.
+
+**Limitation:** The "Improve" step requires calculating an expectation over $s'$. This requires a model ($p$).
+
+### 3.2 The Q-Function Breakthrough (Model-Free)
+Why do we learn $Q(s, a)$ instead of just $V(s)$?
+*   **V-Function:** To extract a policy from $V(s)$, we need a model to predict which action leads to the best next state:
+
+$$
+\pi(s) = \arg\max_a \sum_{s'} p(s'|s,a) V(s')
+$$
+
+*   **Q-Function:** If we have $Q(s, a)$, the "future" and "model" are already baked into the value. We simply pick the biggest number:
+
+$$
+\pi(s) = \arg\max_a Q(s, a)
+$$
+
+**Conclusion:** Learning $Q$ allows **Model-Free** control.
+
+
+
+## 4. Fitted Q-Iteration (FQI)
+
+When state spaces are large (e.g., images), we cannot use tables. We must use Function Approximation (Neural Networks) to estimate $Q_\phi(s, a) \approx Q^*(s, a)$.
+
+### 4.1 The Algorithm
+We solve the Bellman Optimality Equation by turning it into a **regression problem**.
+
+$$
+\begin{array}{l}
+\hline
+\textbf{Algorithm: Fitted Q-Iteration} \\
+\hline
+\textbf{Input: } \text{Dataset } \mathcal{D} = \{(s_i, a_i, r_i, s'_i)\}, \text{ function approximator } Q_\phi \\
+\text{Initialize parameters } \phi \text{ randomly} \\
+\textbf{for } k = 1, \dots, K \textbf{ do} \\
+\quad \textbf{Compute Targets:} \\
+\quad \quad y_i \leftarrow r_i + \gamma \max_{a'} Q_{\phi_{k-1}}(s'_i, a') \quad \forall i \in \mathcal{D} \\
+\quad \textbf{Regression (Train Network):} \\
+\quad \quad \phi_k \leftarrow \arg\min_\phi \sum_i (Q_\phi(s_i, a_i) - y_i)^2 \\
+\textbf{end for} \\
+\hline
+\end{array}
+$$
+
+### 4.2 Why Regression Works (Stochastic Targets)
+The target $y_i$ uses a single sample next state $s'_i$, but the Bellman equation requires an expectation $E_{s'}$.
+*   **Target:** $y_i \approx \text{Sample of } (r + \gamma \max Q)$
+*   **Regression:** Minimizing MSE approximates the **conditional expectation**:
+
+$$
+\arg\min_\phi E[(Q_\phi - y)^2] \implies Q_\phi(s,a) \approx E[y | s,a]
+$$
+
+Thus, training on noisy samples allows the network to recover the true expected Bellman update.
+
+### 4.3 Q-Learning (Online)
+Q-Learning is simply the online version of FQI with a batch size of 1.
+
+$$
+\phi \leftarrow \phi - \alpha \nabla_\phi (Q_\phi(s, a) - y)^2
+$$
+*(Note: We treat $y$ as a fixed constant during the gradient step, even though it depends on $\phi$.)*
+
+
+
+## 5. Theoretical Properties
+
+### 5.1 Optimality of the Greedy Policy
+Does maximizing $Q^*$ really give the best policy? **Yes.**
+*   **Definition:** $V^*(s)$ is the maximum possible value achievable by any policy.
+*   **Connection:** The policy $\pi^*$ that achieves this maximum satisfies $V^{\pi^*} = V^*$.
+*   **Result:** The Q-function for this policy is $Q^{\pi^*}(s, a) = r + \gamma E[V^*(s')]$, which is exactly the definition of $Q^*$.
+Therefore, finding $Q^*$ is equivalent to finding the optimal policy.
+
+### 5.2 Convergence Issues
+*   **Tabular Case:** The Bellman Operator $\mathcal{B}$ is a contraction in the max-norm ($L_\infty$). Iterating it guarantees convergence to $Q^*$.
+*   **Function Approximation:** We cannot represent $Q$ perfectly. Each step involves a "Projection" $\Pi$ (fitting the neural net).
+    *   $\mathcal{B}$ contracts in $L_\infty$.
+    *   $\Pi$ contracts in $L_2$ (MSE).
+    *   **The Problem:** The combination $\Pi \mathcal{B}$ is **not** necessarily a contraction.
+    *   **Consequence:** FQI and Q-Learning can diverge with neural networks (unlike Gradient Bandit or tabular methods).
+
+### 5.3 Practical Reality: All States vs. Expectation
+*   **Theory (Tabular):** We seek **Pointwise Optimality** ($V^{\pi^*}(s) \ge V^\pi(s)$ for all $s$).
+*   **Practice (Deep RL):** We minimize error weighted by the data distribution $\rho$.
+
+$$
+\mathcal{L}(\phi) = E_{s \sim \rho} [ (Q_\phi - y)^2 ]
+$$
+
+We maximize performance **on average** over the states we actually visit, potentially sacrificing accuracy in rare states.

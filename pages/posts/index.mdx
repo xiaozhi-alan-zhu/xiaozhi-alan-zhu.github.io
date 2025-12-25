@@ -16,6 +16,7 @@ export const getStaticProps = async () => {
   const posts = filenames
     .filter(filename => filename.endsWith('.md') || filename.endsWith('.mdx'))
     .filter(filename => filename !== 'index.mdx') // Exclude index page
+    .filter(filename => !filename.startsWith('_')) // Exclude underscore-prefixed drafts
     .map(filename => {
       const filePath = path.join(postsDirectory, filename)
       const fileContents = fs.readFileSync(filePath, 'utf8')
@@ -31,6 +32,7 @@ export const getStaticProps = async () => {
         route: '/posts/' + filename.replace(/\.mdx?$/, '')
       }
     })
+    .filter(post => !post.frontMatter.draft) // Exclude posts with draft: true
 
   return {
     props: {
