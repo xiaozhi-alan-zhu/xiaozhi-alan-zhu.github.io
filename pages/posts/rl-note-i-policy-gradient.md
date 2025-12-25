@@ -1,6 +1,6 @@
 ---
 title: Reinforcement Learning Notes (I) -- Policy Gradient
-description: Comprehensive mathematical introduction to policy gradient
+description: Minimum introduction to policy gradient
 date: 2025-12-21
 tags: [reinforcement-learning, policy-gradient]
 ---
