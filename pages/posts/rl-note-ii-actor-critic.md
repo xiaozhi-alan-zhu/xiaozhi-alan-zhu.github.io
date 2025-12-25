@@ -1,6 +1,6 @@
 ---
 title: Reinforcement Learning Notes (II) -- Actor-Critic
-description: Comprehensive mathematical introduction to actor-critic
+description: Minimal introduction to actor-critic
 date: 2025-12-24
 tags: [reinforcement-learning, actor-critic]
 ---
@@ -127,11 +127,11 @@ $$
 $$
 >
 > *   **Term A (Immediate Variance):** The variance arising from the randomness of the *current* step (action choice $a_t$, immediate reward $r_t$, and transition to $s_{t+1}$).
-    $$
-    \begin{equation}
-    \text{Term A} = \text{Var}(r_t + \gamma V_{\text{true}}(s_{t+1}))
-    \end{equation}
-    $$
+$$
+\begin{equation}
+\text{Term A} = \text{Var}(r_t + \gamma V_{\text{true}}(s_{t+1}))
+\end{equation}
+$$
 > *   **Term B (Future Variance):** The expected variance of the rewards from time $t+1$ onwards. In Monte Carlo, this sums up the noise of every future coin flip (stochastic actions and transitions) for the rest of the episode. This term is **positive and typically large** for long horizons.
 >
 > **The Actor-Critic Advantage:**
