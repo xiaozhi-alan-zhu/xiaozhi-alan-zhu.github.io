@@ -77,6 +77,8 @@ def train_bpe(string: str, num_merges: int) -> BPETokenizerParams:
     return BPETokenizerParams(vocab=vocab, merges=merges)
 ```
 
+A full self-contained implementation can be found in [train_bpe.py](https://github.com/xiaozhi-alan-zhu/llm-from-scratch/blob/main/train_bpe.py).
+
 ### 1.5 The Encoding Process (Deterministic Replay)
 
 How does BPE tokenize a new string? It does **not** search for the longest match. **It replays the training history.**

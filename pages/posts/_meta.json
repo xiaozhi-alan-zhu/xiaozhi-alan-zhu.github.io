@@ -6,6 +6,9 @@
             "breadcrumb": false
         }
     },
+    "LLM-from-scratch-i-basic": {
+        "display": "hidden"
+    },
     "*": {
         "theme": {
             "sidebar": true,
