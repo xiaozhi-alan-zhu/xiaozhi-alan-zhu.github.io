@@ -7,3 +7,4 @@ tags: [DINO,unsupervised-learning, ViT]
 ---
 
 DINO stands for "self-Distillation with NO labels". It is a self-supervised learning method for training visual transformers.
+
