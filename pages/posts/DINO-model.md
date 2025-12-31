@@ -17,13 +17,13 @@ tags: [DINO, ViT, self-supervised-learning]
 
 
 
-### 1.1 The Context: Why ViT needed "Saving"
-When **Vision Transformer (ViT)** was first introduced [@dosovitskiy2020image], it didn't immediately replace CNNs the way Transformers supplanted RNNs in NLP.
+### 1.1 The Context: The "Data Hungry" Challenge
+When **Vision Transformer (ViT)** was first introduced [@dosovitskiy2020image], it faced three hurdles preventing it from simply replacing CNNs:
 
-*   **The "Inductive Bias" Problem**:
-    *   **CNNs (ResNet)** are like **"students with a cheat sheet"**. They have hard-coded knowledge about images: pixel locality (pixels nearby are related) and translation invariance (a cat in the top-left is the same as a cat in the bottom-right). This allows them to learn efficiently even with smaller datasets (ImageNet-1k).
-    *   **ViT** is like a **"genius student with a blank slate"**. It makes no assumptions about image structure. It has to learn *everything* from scratch, including the fact that adjacent pixels form objects.
-*   **The Data Hunger**: Because it lacked these "cheat sheets" (inductive biases), the original ViT required the massive **JFT-300M** (Google's private 300M labeled images) dataset to outperform ResNet. On standard ImageNet-1k, it struggled to beat ConvNets.
+1.  **Lack of Inductive Bias**: CNNs have built-in "assumptions" about images (locality, shift invariance). ViTs, treating images as generic sequences, must *learn* these spatial rules from scratch, making them extremely **data-hungry**.
+2.  **Rugged Optimization Landscape**: Without these priors, ViTs are notoriously hard to optimize. Training from scratch on standard datasets (like ImageNet-1k) often leads to overfitting or unstable convergence compared to ResNets.
+3.  **Signal Sparsity**: Supervised Learning gives a "weak" signal (one integer label per image). For a model as flexible as ViT, this scalar feedback is insufficient to constrain the massive parameter space effectively. They need "dense" supervision—which is exactly what Self-Supervised Learning (SSL) provides.
+
 
 **Enter Self-Supervised Learning (SSL)**:
 As Yann LeCun's "Cake" analogy suggests, supervised learning (labels) limits the information signal. SSL provides a dense signal that allows ViT to learn these structural rules from the data itself, without needing 300M human labels.
