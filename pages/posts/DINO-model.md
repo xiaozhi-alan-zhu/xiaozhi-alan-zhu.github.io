@@ -63,14 +63,26 @@ Here is the process for a single training step:
 
 From a single input image (e.g., a $1080 \times 1080$ photo), the algorithm generates a "batch" of different views. This batch is split into two main categories:
 
-1. **Global Views (The "Teacher's" View):**
-    - **What they are:** Two separate, large crops are taken from the original image.
-    - **Process:** The algorithm randomly selects a large area (e.g., 50% to 100% of the original image) and a random aspect ratio. This crop is then resized to the network's standard input size (e.g., **$224 \times 224$ pixels**). There will be a meaningful amount of overlap between two images.
-    - **Purpose:** These views contain the overall scene and context—the "big picture."
-2. **Local Views (The "Student's" Test):**
-    - **What they are:** Several (e.g., 4, 6, or 8) additional, small crops are taken.
-    - **Process:** The algorithm randomly selects very small areas (e.g., 5% to 40% of the original image). These tiny crops are then resized to a much smaller input size (e.g., **$96 \times 96$ pixels**).
-    - **Purpose:** These views act as "zoomed-in" details, like looking at just an eye, a wheel, or a single leaf.
+<ol>
+  <li style="margin-bottom: 10px;">
+    <strong>Global Views (The "Teacher's" View):</strong>
+    <ul style="margin-top: 5px; margin-bottom: 5px;">
+      <li><strong>What they are:</strong> Two separate, large crops are taken from the original image.</li>
+      <li><strong>Process:</strong> The algorithm randomly selects a large area (e.g., 50% to 100% of the original image) and a random aspect ratio. This crop is then resized to the network's standard input size (e.g., <strong>$224 \times 224$ pixels</strong>). There will be a meaningful amount of overlap between two images.</li>
+      <li><strong>Purpose:</strong> These views contain the overall scene and context—the "big picture."</li>
+    </ul>
+  </li>
+  <li style="margin-bottom: 10px;">
+    <strong>Local Views (The "Student's" Test):</strong>
+    <ul style="margin-top: 5px; margin-bottom: 5px;">
+      <li><strong>What they are:</strong> Several (e.g., 4, 6, or 8) additional, small crops are taken.</li>
+      <li><strong>Process:</strong> The algorithm randomly selects very small areas (e.g., 5% to 40% of the original image). These tiny crops are then resized to a much smaller input size (e.g., <strong>$96 \times 96$ pixels</strong>).</li>
+      <li><strong>Purpose:</strong> These views act as "zoomed-in" details, like looking at just an eye, a wheel, or a single leaf.</li>
+    </ul>
+  </li>
+</ol>
+
+
 
 
 
@@ -266,7 +278,6 @@ DINO v1 revealed something magical: **Self-Attention maps automatically segment 
 1.  **Data Curation (LVD-142M)**
     *   They didn't just use more data; they built an automated pipeline to filter and balance a dataset of 142M images.
     *   Used image similarity to deduplicate and retrieve images similar to ImageNet-22k.
-
 2.  **Architecture & Objective improvements**
     *   **iBOT Integration**: Added Masked Image Modeling (MIM) to DINO.
         *   DINO (Global): Matches global CLS token.
@@ -274,7 +285,6 @@ DINO v1 revealed something magical: **Self-Attention maps automatically segment 
     *   **Sinkhorn-Knopp Centering**: Replaced simple mean-centering with Sinkhorn-Knopp normalization (from SwAV) for better feature spread.
     *   **KoLeo Regularizer**: Maximizes the distance between features in a batch to ensure "uniform span" of the feature space.
     *   **High-Res Adaption**: A final short training stage at high resolution (e.g., 518x518) to sharpen localized features.
-
 3.  **Efficient Implementation**
     *   FlashAttention, PyTorch 2.0 optimizations, and Fully Sharded Data Parallel (FSDP).
 
