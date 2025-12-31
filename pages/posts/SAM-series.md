@@ -5,3 +5,5 @@ date: 2025-12-27
 tags: [SAM, ViT,]
 draft: true
 ---
+
+SAM is a powerful tool
