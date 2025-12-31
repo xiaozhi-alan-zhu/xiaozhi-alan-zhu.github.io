@@ -1,0 +1,18 @@
+/* Global Utility Classes */
+
+/* Tight List: Reduces vertical spacing for compact lists */
+.tight-list ul,
+.tight-list ol {
+    margin-top: 0.25rem !important;
+    margin-bottom: 0.25rem !important;
+}
+
+.tight-list li {
+    margin-top: 0 !important;
+    margin-bottom: 0.25rem !important;
+}
+
+/* Ensure nested paragraphs don't add extra space */
+.tight-list li>p {
+    margin: 0 !important;
+}
