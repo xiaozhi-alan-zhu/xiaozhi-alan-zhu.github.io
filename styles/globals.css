@@ -1,6 +1,24 @@
 /* Global Utility Classes */
 
-/* Tight List: Reduces vertical spacing for compact lists */
+/* Global List Spacing */
+.nextra-container ul,
+.nextra-container ol,
+article ul,
+article ol,
+.nx-content ul,
+.nx-content ol {
+    margin-top: 0.1em !important;
+    margin-bottom: 0.1em !important;
+}
+
+.nextra-container li,
+article li,
+.nx-content li {
+    margin-top: 0 !important;
+    margin-bottom: 0.1em !important;
+}
+
+/* Tight List override */
 .tight-list ul,
 .tight-list ol {
     margin-top: 0.25rem !important;
@@ -12,7 +30,35 @@
     margin-bottom: 0.25rem !important;
 }
 
-/* Ensure nested paragraphs don't add extra space */
 .tight-list li>p {
     margin: 0 !important;
+}
+
+/* Captioned Image: Centers image and caption */
+.captioned-image {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 1.5rem 0;
+}
+
+.captioned-image img {
+    width: 100%;
+    border-radius: 8px;
+    /* Optional: adds nice rounded corners */
+}
+
+.captioned-image p {
+    text-align: center;
+    color: #555;
+    font-style: italic;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+/* Giscus Comments Container */
+.giscus-container {
+    margin-top: 50px;
+    border-top: 1px solid #eaeaea;
+    padding-top: 20px;
 }

@@ -10,7 +10,7 @@ export default function Comments() {
         setMounted(true);
     }, []);
 
-    if (!mounted) return null;
+    if (!mounted) return <div style={{ padding: '20px', color: 'red', border: '1px solid red' }}>Comments Loading (Debug)...</div>;
 
     return (
         <div style={{ marginTop: '50px', borderTop: '1px solid #eaeaea', paddingTop: '20px' }}>
