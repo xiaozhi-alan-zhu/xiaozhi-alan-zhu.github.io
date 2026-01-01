@@ -27,6 +27,7 @@ module.exports = async () => {
 
     return withNextra({
         output: 'export',
+        trailingSlash: true,
         images: {
             unoptimized: true
         }
