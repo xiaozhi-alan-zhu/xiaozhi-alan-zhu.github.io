@@ -21,6 +21,7 @@
   "description": "",
   "dependencies": {
     "@giscus/react": "^3.1.0",
+    "gray-matter": "^4.0.3",
     "next": "^14.2.35",
     "nextra": "^2.13.4",
     "nextra-theme-docs": "^2.13.4",
