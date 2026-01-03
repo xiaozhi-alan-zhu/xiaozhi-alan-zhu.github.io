@@ -321,16 +321,27 @@ Training a **1.1 Billion parameter (ViT-Giant)** model requires massive optimiza
 *   **Sequence Packing**: Instead of padding sequences to the same length (wasteful) or using nested tensors (complex), they concatenate all sequences into one long buffer and use block-diagonal attention masks. This drastically improves efficiency for multi-crop training where crop sizes vary.
 *   **FSDP (Fully Sharded Data Parallel)**: Splits model parameters, gradients, and optimizer states across GPUs, allowing the giant model to fit into memory.
 
-### 3.4 Key Results: The "All-in-One" Backbone
-DINOv2 achieves strong performance on "Frozen Features"—meaning the backbone is *never* updated. Its capabilities can be categorized by task type, which dictates the optimal embedding usage:
+### 3.4 Evaluation: The "Frozen Features" Philosophy
+DINOv2's core evaluation metric is the performance of **Frozen Features**—using the pre-trained backbone *without* any fine-tuning. This tests the model's "out-of-the-box" capability as a true Foundation Model.
 
-*   **Global Tasks (Classification, Retrieval)**:
-    *   **Performance**: Reaches **86.5% top-1** on ImageNet with a linear probe, matching state-of-the-art weakly supervised models.
-    *   **Usage**: Use the **`[CLS]` token** (or average pool), which aggregates global semantics.
-*   **Dense Prediction (Segmentation, Depth)**:
-    *   **Performance**: Unlike CLIP (good at text but weak at localization), DINOv2 produces clear object boundaries and understands 3D geometry.
-    *   **Usage**: Use **Patch Tokens**. Thanks to the iBOT objective, these tokens preserve precise spatial information.
-*   **Universal Representation**: The same frozen backbone serves all these downstream tasks simultaneously.
+#### 1. Quantitative Benchmarks
+The model achieves state-of-the-art results across diverse tasks using simple heads on frozen features:
+
+| Task | Metric | Performance | Comparison |
+| :--- | :--- | :--- | :--- |
+| **ImageNet Classification** | Top-1 Acc | **86.5%** | Matches weakly-supervised SotA (e.g., OpenCLIP-G) and beats iBOT. |
+| **Semantic Segmentation** | ADE20k mIoU | **53.0%** | Outperforms many supervised baselines; DINOv2+Mask2Former reaches 60.2%. |
+| **Depth Estimation** | NYUd RMSE | **0.298** | Excellent reasoning of 3D geometry from 2D images. |
+| **OOD Robustness** | ImageNet-A | **High** | ~20-30% improvement over iBOT on adversarial/sketch domains. |
+
+> [!TIP]
+> **Which embedding should you use?**
+> *   **Global Tasks (Classification, Retrieval)**: Use the `[CLS]` token (or average pool). It aggregates global semantics.
+> *   **Dense Tasks (Segmentation, Depth)**: Use the **Patch Tokens**. Thanks to the iBOT objective, these tokens preserve precise spatial information.
+
+#### 2. Qualitative Capabilities
+*   **PCA Visualization**: Principal Component Analysis of the feature maps shows that *semantic parts* (e.g., bird heads, wheel spokes) are automatically aligned across different images without any supervision.
+*   **Instance Retrieval**: On Oxford/Paris datasets, standard cosine similarity retrieval works out-of-the-box without re-ranking, proving the features are naturally discriminative.
 
 ---
 
