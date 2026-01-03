@@ -5,9 +5,9 @@ date: 2025-12-27
 tags: [DINO, ViT, self-supervised-learning]
 # draft: true
 ---
-
 import Comments from '../../components/Comments'
-
+import Mermaid from '../../components/Mermaid'
+import DinoArchitectureDiagram from '../../components/DinoArchitectureDiagram'
 
 ## 1. Introduction: Supervised learning is not enough to bring out full potential of ViT
 
@@ -65,8 +65,6 @@ Here is the process for a single training step:
 ####  Step 1: Data Preparation (Multi-Crop Augmentation)
 
 <div class="tight-list">
-
-
 From a single input image (e.g., a $1080 \times 1080$ photo), the algorithm generates a "batch" of different views. This batch is split into two main categories:
 
 1. **Global Views (The "Teacher's" View):**
@@ -274,28 +272,65 @@ DINO v1 revealed something magical: **Self-Attention maps automatically segment 
 
 ---
 
-## 3. DINOv2: Scaling and Unification
+## 3. DINOv2: Learning Robust Visual Features without Supervision
 
-> **Motivation**: DINO v1 was great, but training on uncurated data (like raw web crawls) led to quality drops. Standard "foundation models" in NLP (GPT) work out-of-the-box; Vision needed the same.
+> **Motivation**: While DINO v1 showed the potential of SSL, it was trained on ImageNet (curated). Scaling it to uncurated Internet data (like CLIP) proved difficult—data quality became the bottleneck. DINOv2 addresses this by building a customized, automated data curation pipeline to create a "Vision Foundation Model" that works out-of-the-box for both semantic (classification) and geometric (segmentation/depth) tasks.
 
-### 3.1 The Three Pillars of DINOv2
-1.  **Data Curation (LVD-142M)**
-    *   They didn't just use more data; they built an automated pipeline to filter and balance a dataset of 142M images.
-    *   Used image similarity to deduplicate and retrieve images similar to ImageNet-22k.
-2.  **Architecture & Objective improvements**
-    *   **iBOT Integration**: Added Masked Image Modeling (MIM) to DINO.
-        *   DINO (Global): Matches global CLS token.
-        *   iBOT (Local): Matches masked patch tokens.
-    *   **Sinkhorn-Knopp Centering**: Replaced simple mean-centering with Sinkhorn-Knopp normalization (from SwAV) for better feature spread.
-    *   **KoLeo Regularizer**: Maximizes the distance between features in a batch to ensure "uniform span" of the feature space.
-    *   **High-Res Adaption**: A final short training stage at high resolution (e.g., 518x518) to sharpen localized features.
-3.  **Efficient Implementation**
-    *   FlashAttention, PyTorch 2.0 optimizations, and Fully Sharded Data Parallel (FSDP).
+### 3.1 Data is King: The LVD-142M Algorithm
+The authors found that simply adding more uncurated data doesn't guarantee better performance. Instead, they built a sophisticated pipeline to curate the **LVD-142M** dataset (Large Visual Data, 142M images).
 
-### 3.2 Key Results
-DINOv2 provided a **"All-in-One" backbone**:
-*   **Frozen features** outperform fine-tuned models on many tasks.
-*   Works for Depth Estimation, Semantic Segmentation, and Instance Retrieval without any task-specific training.
+Here is the flow of their "Data Engine":
+
+<img src="/assets/lvd-142m-pipeline.png" alt="LVD-142M Data Pipeline" className="w-full rounded-lg border border-gray-200 my-4" />
+
+1.  **Source**: Started with 1.2 billion raw images crawled from the web (filtering out NSFW and identifiable metrics).
+2.  **Copy Detection**: Removed near-duplicates to prevent memorization and redundancy.
+3.  **Self-Supervised Retrieval**:
+    *   They used a frozen ViT-H trained on ImageNet-22k to compute embeddings for all 1.2B images.
+    *   They then retrieved images that were semantically similar to curated datasets (like ImageNet-22k and Google Landmarks). This acts as a "soft filter"—keeping web images that look like "real objects" or "clean scenes" while discarding random noise.
+4.  **Clustering & Rebalancing**: They clustered the retrieved images and re-sampled them to ensure a balanced distribution, preventing the model from overfitting to dominant concepts.
+
+### 3.2 Methodological Upgrades
+DINOv2 combines the best parts of DINO and **iBOT** (masked image modeling) into a unified objective.
+
+<DinoArchitectureDiagram />
+
+*   **Image-Level (DINO)**: The student matches the teacher's global class token output. Learns high-level semantics.
+    $$
+    \mathcal{L}_{DINO} = - \sum_{i} P_t(x_i) \log P_s(x_i)
+    $$
+
+    where $P_t$ and $P_s$ represent the probability distributions (Softmax outputs) of the teacher and student networks, respectively.
+*   **Patch-Level (iBOT)**: Some patches are masked. The student must reconstruct the teacher's features for these masked patches. Learns low-level structure.
+    $$
+    \mathcal{L}_{iBOT} = - \sum_{m \in M} P_t(\hat{x}_m) \log P_s(\tilde{x}_m)
+    $$
+    where $M$ is the set of masked indices, $P_t$ and $P_s$ are teacher and student outputs, and $\tilde{x}$ represents the masked view input to the student.
+*   **Untying Head Weights**: Crucially, DINOv2 uses *separate* projection heads for DINO and iBOT losses, unlike previous works that shared them. This prevents conflict between the two objectives.
+*   **KoLeo Regularizer**: A new loss term based on *differential entropy*. It forces feature vectors in a batch to be uniformly distributed on the hypersphere, preventing collapse and ensuring the embedding space is fully utilized. Some simple demo examples can be found in [this github repo](https://github.com/xiaozhi-alan-zhu/koleo-regularizer-demo).
+    $$
+    \mathcal{L}_{KoLeo} = - \frac{1}{n} \sum_{i=1}^n \ln \left( \min_{j \neq i} \| x_i - x_j \| \right)
+    $$
+
+    where $n$ is the batch size, $x_i$ is the feature vector of the $i$-th sample, and the term minimizes the distance to the nearest neighbor ($j$) for each sample.
+*   **High-Resolution Adaptation**: A final, short training phase increases the resolution (e.g., to $518 \times 518$). This is crucial for dense prediction tasks like segmentation.
+
+### 3.3 Scaling Engineering (ViT-Giant)
+Training a **1.1 Billion parameter (ViT-Giant)** model requires massive optimization:
+*   **FlashAttention**: Used to speed up self-attention and reduce memory usage.
+*   **Sequence Packing**: Instead of padding sequences to the same length (wasteful) or using nested tensors (complex), they concatenate all sequences into one long buffer and use block-diagonal attention masks. This drastically improves efficiency for multi-crop training where crop sizes vary.
+*   **FSDP (Fully Sharded Data Parallel)**: Splits model parameters, gradients, and optimizer states across GPUs, allowing the giant model to fit into memory.
+
+### 3.4 Key Results: The "All-in-One" Backbone
+DINOv2 achieves strong performance on "Frozen Features"—meaning the backbone is *never* updated. Its capabilities can be categorized by task type, which dictates the optimal embedding usage:
+
+*   **Global Tasks (Classification, Retrieval)**:
+    *   **Performance**: Reaches **86.5% top-1** on ImageNet with a linear probe, matching state-of-the-art weakly supervised models.
+    *   **Usage**: Use the **`[CLS]` token** (or average pool), which aggregates global semantics.
+*   **Dense Prediction (Segmentation, Depth)**:
+    *   **Performance**: Unlike CLIP (good at text but weak at localization), DINOv2 produces clear object boundaries and understands 3D geometry.
+    *   **Usage**: Use **Patch Tokens**. Thanks to the iBOT objective, these tokens preserve precise spatial information.
+*   **Universal Representation**: The same frozen backbone serves all these downstream tasks simultaneously.
 
 ---
 
@@ -315,9 +350,9 @@ To fix this, DINOv3 introduces a regularization term called **Gram Anchoring**.
 
 
 
-    $$
-    \mathcal{L}_{Gram} = || G_{student} - G_{GramTeacher} ||_F^2
-    $$
+$$
+\mathcal{L}_{Gram} = || G_{student} - G_{GramTeacher} ||_F^2
+$$
 
 
 
