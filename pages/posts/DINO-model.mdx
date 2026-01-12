@@ -75,11 +75,7 @@ From a single input image (e.g., a $1080 \times 1080$ photo), the algorithm gene
     - **What they are:** Several (e.g., 4, 6, or 8) additional, small crops are taken.
     - **Process:** The algorithm randomly selects very small areas (e.g., 5% to 40% of the original image). These tiny crops are then resized to a much smaller input size (e.g., **$96 \times 96$ pixels**).
     - **Purpose:** These views act as "zoomed-in" details, like looking at just an eye, a wheel, or a single leaf.
-
 </div>
-
-
-
 
 
 
@@ -352,41 +348,99 @@ The model achieves state-of-the-art results across diverse tasks using simple he
 
 ## 4. DINOv3: The "Infinite Training" Paradox
 
-> **The Problem with DINOv2**: When you train for *too long*, the global metrics (e.g., ImageNet classification) keep improving, BUT the **dense features** (patch-level understanding for segmentation/depth) start to degrade.
+### 4.1 The Paradox: Global Gain, Local Pain
+DINOv3 (2025) uncovered a surprising phenomenon: **longer training doesn't always mean better features.**
 
-The authors of DINOv3 (2025) discovered that long training schedules cause "patch-level inconsistencies". The model becomes *too* abstract, losing the precise spatial coherence needed for dense tasks.
+When scaling DINOv2 to larger data and longer schedules:
+*   **Global Metrics (e.g., ImageNet Classification)**: Continue to improve indefinitely. The model learns better invariant semantics (e.g., "this is a dog").
+*   **Dense Metrics (e.g., Segmentation, Depth)**: Peak early (~200k iterations) and then **consistently degrade**. The model becomes *too* abstract, losing the spatial coherence needed to say *where* the dog is pixel-by-pixel.
 
-### 4.1 The Solution: Gram Anchoring
-To fix this, DINOv3 introduces a regularization term called **Gram Anchoring**.
+**Visualizing the Collapse:**
+Below, we observe the "Infinite Training Paradox" through two lenses:
+1.  **Visual (Top Row)**: Feature maps of a specific patch (red dot) at 200k, 600k, and 1M iterations. Note how the attention starts clean but degenerates into background noise.
+2.  **Statistical (Bottom Row)**: Performance curves showing the divergence. While ImageNet accuracy (Pink) rises, dense task performance (Blue) crashes.
 
-*   **Concept**: We want the features to evolve (to get better global performance), but we want the *relationship between patches* (the structure) to stay consistent with early, healthy training states.
-*   **The "Gram Teacher"**: They take a snapshot of the teacher network from an earlier training step (where dense features were good).
-*   **The Gram Matrix**: $G = X X^T$. Encodes the similarity between every pair of patches in an image.
-*   **The Loss**:
+<div className="my-8 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+  
+  {/* Visual Evidence Header */}
+  <div className="bg-gray-50 dark:bg-gray-800 py-2 px-4 border-b border-gray-200 dark:border-gray-700">
+    <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Exhibit A: Visual Collapse (Attention Maps)</p>
+  </div>
+  
+  <div className="bg-white dark:bg-gray-900" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+    <div className="bg-white dark:bg-gray-900 flex flex-col items-center" style={{ padding: '24px' }}>
+      <img src="/images/posts/DINO-model/dinov3/evolution/200k.png" className="w-full object-cover" />
+      <p className="py-2 text-sm italic text-center text-gray-600 dark:text-gray-400">200k Iterations (Peak)</p>
+    </div>
+    <div className="bg-white dark:bg-gray-900 flex flex-col items-center" style={{ padding: '24px' }}>
+      <img src="/images/posts/DINO-model/dinov3/evolution/1m.png" className="w-full object-cover" />
+      <p className="py-2 text-sm italic text-center text-gray-600 dark:text-gray-400">1M Iterations (Collapsed)</p>
+    </div>
+  </div>
 
+  {/* Statistical Evidence Header */}
+  <div className="bg-gray-50 dark:bg-gray-800 py-2 px-4 border-y border-gray-200 dark:border-gray-700">
+    <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Exhibit B: Statistical Divergence (Performance)</p>
+  </div>
 
+  <div className="bg-white dark:bg-gray-900" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+    <div className="bg-white dark:bg-gray-900 flex flex-col items-center">
+      <img src="/images/posts/DINO-model/dinov3/evolution/perf_vit_g.png" className="w-full" />
+      <p className="mt-2 text-sm italic text-center text-gray-600 dark:text-gray-400">ViT-g: ImageNet (Pink) rises, but VOC (Blue) degrades after 200k.</p>
+    </div>
+    <div className="bg-white dark:bg-gray-900 flex flex-col items-center">
+      <img src="/images/posts/DINO-model/dinov3/evolution/perf_vit_7b.png" className="w-full" />
+      <p className="mt-2 text-sm italic text-center text-gray-600 dark:text-gray-400">ViT-7B: Dense performance (Blue) collapses while global metrics stay stable.</p>
+    </div>
+  </div>
+</div>
+
+### 4.2 The Solution: Gram Anchoring
+To solve this, DINOv3 introduces **Gram Anchoring**, a regularization technique that acts as a "structural anchor."
+
+#### The "Gram Teacher"
+The idea is simple: interpret the **Gram Matrix** of the features as a "fingerprint" of the image's geometry/texture.
+1.  **Snapshot**: Take a "Gram Teacher" from an early, healthy stage of training (or use high-res inputs).
+2.  **Regularize**: Force the student model (which is learning advanced semantics) to maintain the *same patch-to-patch relationships* as the Gram Teacher.
 
 $$
-\mathcal{L}_{Gram} = || G_{student} - G_{GramTeacher} ||_F^2
+\mathcal{L}_{Gram} = || G_{student} - G_{GramTeacher} ||_F^2 \quad \text{where} \quad G = X X^T
 $$
 
+This allows the feature *values* to evolve (improving classification) while "anchoring" their *structure* (preserving segmentation).
 
+**Effect of Gram Anchoring:**
+Comparing features trained *without* (Left) vs *with* (Right) Gram Anchoring. The anchored model preserves sharp, object-aligned boundaries.
 
+<div className="my-8 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
+  <div className="grid grid-cols-2 bg-gray-50 dark:bg-gray-800 py-4" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+    <div className="flex flex-col items-center">
+      <img src="/images/posts/DINO-model/dinov3/gram-without.png" alt="Without Gram" className="w-full object-cover" />
+      <p className="mt-2 text-sm italic text-center text-gray-600 dark:text-gray-400">Without Gram (Noisy)</p>
+    </div>
+    <div className="flex flex-col items-center">
+      <img src="/images/posts/DINO-model/dinov3/gram-with.png" alt="With Gram" className="w-full object-cover" />
+      <p className="mt-2 text-sm italic text-center text-gray-600 dark:text-gray-400">With Gram (Anchored)</p>
+    </div>
+  </div>
+</div>
 
-This forces the student's current patch relationships to match the structural "fingerprint" of the Gram Teacher, even as the individual feature values change.
+### 4.3 High-Resolution Refinement
+A key trick in DINOv3 is using **High-Resolution input** for the Gram Teacher.
+*   The Student sees a standard $224 \times 224$ image.
+*   The Gram Teacher sees a $512 \times 512$ version.
+*   The Gram Matrix forces the student to "hallucinate" the structural coherence of the high-res image, effectively distilling high-res quality into a standard-res model.
 
-### 4.2 Algorithm: Gram Anchoring Strategy
-1.  Train normally for first 11M iterations.
-2.  **Snapshot**: Fix a "Gram Teacher" (provides the structural anchor).
-3.  **Continue Training**: Add $\mathcal{L}_{Gram}$ to the loss.
-4.  **Refinement**: Periodically update the Gram Teacher to "catch up" slightly, but always keeping it anchored to a stable dense-feature state.
+### 4.4 Final Results
+The result is a **7B parameter** frozen backbone that achieves state-of-the-art results on *both* ends of the spectrum.
 
-### 4.3 Why "Gram"?
-The Gram matrix captures the **style** or **texture** of feature interactions (famous from Style Transfer papers). Here, it captures the "geometric consistency" of the image representation.
+<div className="captioned-image">
+  <img src="/images/posts/DINO-model/dinov3/cat-pca.jpg" alt="DINOv3 PCA Visualization" className="w-full rounded-lg border border-gray-200" />
+  <p>DINOv3 PCA Visualization: Sharp, semantic coherency even in complex scenes.</p>
+</div>
 
-### 4.4 Results
-*   **No Compromise**: DINOv3 achieves SOTA on *both* global tasks (ImageNet) and dense tasks (Segmentation/Depth).
-*   **Scalability**: Allows training "indefinitely" without the dense performance collapsing.
+*   **Scalability**: Solves the degradation paradox, enabling training on 17B images (LVD-1689M).
+*   **Performance**: Sets SOTA for Semantic Segmentation (ADE20k) and Monocular Depth, purely with frozen features.
 
 ---
 
@@ -403,7 +457,7 @@ The Gram matrix captures the **style** or **texture** of feature interactions (f
 | **Main Strength** | Unsupervised Segmentation | Robust Generalist Features | Infinite Training Stability |
 | **Weakness** | Hard to scale to web data | Dense features degrade if trained too long | Complexity of multiple teachers |
 
-### 5.2 Takeaway for Students
+### 5.2 Takeaway
 The DINO series represents the shift from **Contrastive** to **Generative/Distillative** learning in Vision.
 *   **v1** taught us that simple rules (centering/sharpening) yield emergent intelligence.
 *   **v2** taught us that **Data Quality** matters as much as the algorithm.
