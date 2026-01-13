@@ -4,6 +4,7 @@ description: "How DINOv3 solves the two failures of self-supervised vision: the 
 date: 2026-01-12
 tags: [dino, self-supervised-learning, feature-collapse, registers, transformer]
 ---
+import Comments from '../../components/Comments'
 
 # Further thinking on DINOv3
 
@@ -21,9 +22,9 @@ Here is how DINOv3 transforms these bugs into features.
 
 ## Part 1: High-Norm Artifacts (A Failure of Storage)
 
-In DINOv2 (and many other large ViTs), we observed a strange phenomenon: specific background patches—like corners of the sky or shadows—would exhibit extremely high L2 feature norms, essentially acting as outliers.
+In DINOv2 (and many other large ViTs), researchers observed a strange phenomenon: specific background patches—like corners of the sky or shadows—would exhibit extremely high L2 feature norms, essentially acting as outliers.
 
-For a long time, we thought these were just noise. We were wrong. In *Vision Transformers Need Registers*, comparisons showed that these high-norm tokens were holding global information.
+Initially, these artifacts were dismissed as noise. However, in *Vision Transformers Need Registers*[@darcet2023vision], comparisons revealed that these high-norm tokens were actually holding global information.
 
 ### The Instinct to Centralize
 When a neural network architecture requires global information integration but lacks an explicit "global memory" or "scratchpad," it evolves a survival strategy: **it "recruits" a subset of its input tokens to serve as temporary global storage.**
@@ -39,7 +40,17 @@ DINOv3 (and DINOv2-reg) validates this theory with a simple fix: **Give the mode
 
 By identifying this "instinct," the authors explicitly added 4 **Register Tokens** (`[REG]`) to the input sequence. 
 *   **Result**: The model immediately stops hijacking background patches. The **high-norm artifacts (outliers)** disappear from the spatial map, as the signal moves entirely to the `[REG]` tokens.
-*   **Lesson**: We turned an implicit "bug" (artifacts damaging background features) into an explicit "feature" (registers).
+*   **Verification**: The paper confirms this by plotting token norms (Appendix D). The **registers themselves** take on extreme norm values (often "quantized" into distinct clusters), effectively absorbing the high-norm behavior so patch tokens can remain stable.
+
+<div style={{ display: 'flex', justifyContent: 'center', margin: '16px 0' }}>
+    <img src="/images/posts/dino-v3/register_norms.png" alt="Distribution of token norms: Register tokens (purple) take on the high values, leaving patch tokens (green) with low, stable norms." style={{ maxHeight: '300px', borderRadius: '8px', border: '1px solid #e5e7eb' }} />
+</div>
+
+*   **Lesson**: This turned an implicit "bug" (artifacts damaging background features) into an explicit "feature" (registers).
+
+This aligns with architectural patterns in other fields:
+*   **NLP**: Recent efficient LLMs explicitly preserve **"Sink Tokens"** (often the start token) to absorb massive attention scores, preventing calculations from breaking on normal tokens [@xiao2023efficient].
+*   **GNNs**: Explicit **Virtual Nodes** are added to graphs to handle global message passing, preventing the "bottleneck" effect on local nodes [@gilmer2017neural].
 
 ![Effect of register tokens on the distribution of output norms. Using register tokens effectively removes the norm outliers.](/images/posts/dino-v3/norm_distrib_before_after.png)
 
@@ -47,7 +58,7 @@ By identifying this "instinct," the authors explicitly added 4 **Register Tokens
 
 ## Part 2: Loss of Patch-Level Consistency (A Failure of Signal)
 
-Fixing artifacts gives us clean feature maps, but it doesn't solve the deeper problem of scaling. The DINOv3 paper describes an **"unresolved degradation"**:
+Fixing artifacts produces clean feature maps, but it doesn't solve the deeper problem of scaling. The DINOv3 paper describes an **"unresolved degradation"**:
 
 > As training extends to 1M+ iterations (scaling steps) with larger data (scaling data), the **Global Semantic** performance (ImageNet accuracy) keeps rising, but the **Local Geometric** performance (Segmentation) crashes.
 
@@ -78,12 +89,28 @@ This is not just a blurring effect; it is a fundamental **Rank Collapse** where 
 </div>
 *(As training extends indefinitely, the attention map explodes to cover the entire image, illustrating Rank Collapse.)*
 
+### Deep Dive: Unique Challenges in Self-Supervised Vision
+
+Why does this specific type of collapse manifest in DINOv3 but not typically in large Language Models (LLMs) or other Vision Transformers? The paper (and related literature) suggests this stems from the contradictory nature of the objectives involved:
+
+1.  **Reconstruction vs. Contrastive Objectives (NLP vs. DINO)**:
+    *   **NLP Models (BERT/GPT)**: Typically use reconstruction objectives (Masked Language Modeling or Next Token Prediction). The model must predict a specific, concrete token (e.g., "cat" vs "dog"). If features were to collapse to a single global value, the model would fail to distinguish between vocabulary items, preventing the loss from decreasing. This objective naturally enforces the retention of local identity.
+    *   **DINOv3**: Uses a **Global Invariance Objective** (Contrastive). The optimal mathematical solution to "minimize distance between views" is often to map everything to a constant. While architectural asymmetry (Teacher/Student) usually prevents this, at extreme scales, the model finds a way to satisfy the invariance constraint by discarding local diversity.
+
+2.  **Static vs. Dynamic Targets (MAE vs. DINOv2)**:
+    *   **MAE (Masked Autoencoders)**: The target is **Raw Pixels**. Pixels are static ground truths that never change. The model is forced to retain geometric fidelity to reconstruct them.
+    *   **DINOv2 (iBOT)**: The target is the **Teacher's features**. The teacher is a dynamic entity (Exponential Moving Average). As training progresses to optimize global classification, the teacher itself begins to prioritize global semantics over local geometry. The student, trying to mimic this collapsing teacher, accelerates the degradation in a feedback loop.
+
 ### The Fix: Gram Anchoring
-We cannot just stop the model from learning global semantics (which we want). We need to decouple the **features' specific values** from their **spatial relationships**.
+To resolve this, DINOv3 introduces **Gram Anchoring**, which effectively acts as a regularization using **early training states**.
+
+Since the *current* teacher (at 1M+ iterations) provides degraded dense features, the method anchors the student to a **Gram Teacher** derived from an *earlier* phase of training (e.g., 200k iterations) where the local consistency was still preserved.
+
+One cannot simply stop the model from learning global semantics (which is desirable). It is necessary to decouple the **features' specific values** from their **spatial relationships**.
 
 DINOv3 introduces **Gram Anchoring**:
-1.  **Gram Matrix**: We compute $G = HH^T$. This matrix captures the *pairwise similarity structure* between patches (the topological "fingerprint") regardless of their absolute feature values.
-2.  **Anchoring**: We force the student model to match the Gram Matrix of a "healthy" teacher (e.g., from early training or high-resolution inputs) just on these relationships.
+1.  **Gram Matrix**: The method computes $G = HH^T$. This matrix captures the *pairwise similarity structure* between patches (the topological "fingerprint") regardless of their absolute feature values.
+2.  **Anchoring**: It forces the student model to match the Gram Matrix of a "healthy" teacher (e.g., from early training or high-resolution inputs) just on these relationships.
 
 This forces the model to preserve the **geometric structure** (local consistency) even as the feature values evolve to become more semantically powerful. This resolves the scaling issue, enabling "infinite" training schedules without losing density.
 
@@ -108,3 +135,4 @@ DINOv3 is a story of two corrections:
 
 
 ## Reference
+<Comments />
