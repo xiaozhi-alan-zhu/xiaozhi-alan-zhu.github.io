@@ -1,13 +1,26 @@
 ---
-title: SAM Series
+title: SAM Series (for images and videos)
 description: A detailed summary of SAM models series (v1, v2, v3)
-date: 2025-12-27
-tags: [SAM, ViT]
+date: 2026-01-24
+tags: [SAM, ViT, MITL]
 draft: true
 ---
 
 import Comments from '../../components/Comments'
 
-SAM is a powerful tool
+SAM is a big collection of models published by Meta AI and it aims to segment components from contents. 
+It originally started with image segmentation but gradually expanded to video, [3D geometry](https://ai.meta.com/sam3d/) and [audio](https://ai.meta.com/samaudio/).
+
+In this post, we will focus on the image and video segmentation models. 
+Segmentation is a quite classic task in computer vision and it has been extensively studied for decades. 
+But SAM series models revolutionized the field in following ways:
+
+1. From expert model to foundation model: 
+Traditional segmentation models are usually trained for a specific task or dataset. 
+SAM introduced a "Promptable Segmentation" task and does not require any fine-tuning for zero-shot segmentation. 
+2. Unprecedented dataset scale and strong generalization ability: 
+Previous models are usually trained on about ~100k images and ~1M masks.
+SAM v1 is trained on 11M images and 1.1B masks, which exceeds the scale of previous datasets by more than 100x.
+
 
 <Comments />
