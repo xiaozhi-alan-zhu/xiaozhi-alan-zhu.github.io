@@ -9,9 +9,6 @@
   "LLM-from-scratch-i-basic": {
     "display": "hidden"
   },
-  "SAM-series": {
-    "display": "hidden"
-  },
   "*": {
     "theme": {
       "sidebar": true,
