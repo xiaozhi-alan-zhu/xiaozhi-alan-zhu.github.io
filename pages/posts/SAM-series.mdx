@@ -49,7 +49,7 @@ For this purpose, the authors defined a "Promptable Segmentation" task: given an
     alt="SAM masks"
     style={{ width: "40%" }}
   />
-  <p>SAM produces high-quality masks for all objects in an image.</p>
+  <div>SAM produces high-quality masks for all objects in an image.</div>
 </div>
 
 To achive this goal, there two main issues to resolve:
@@ -289,8 +289,208 @@ graph TB
   </div>
 </div>
 
-## SAM v2:
+## SAM v2: Unified Video and Image Segmentation
+
+<div className="captioned-image">
+  <img
+    src="/images/posts/SAM-series/sam2_teaser.png"
+    alt="SAM 2 Teaser"
+    style={{ width: "90%" }}
+  />
+  <div>SAM 2 unifies image and video segmentation with a single model.</div>
+</div>
+
+### Define the task
+
+Moving from static images to dynamic videos, the authors introduced the **Promptable Visual Segmentation (PVS)** task.
+The goal is to extend the "Promptable Segmentation" capability to the temporal dimension:
+
+- **Input:** Prompts (clicks, boxes, masks) on _any_ frame of a video.
+- **Output:** A valid spatio-temporal masklet (a 3D mask across time) for the target object.
+- **Goal:** **Consistent** across different frames and **flexible** for interactive. It should be able to handle a variety of challenges in video segmentation, such as object appearance changes, occlusions, and background clutter.
+
+PVS unifies image and video segmentation because an image is simply a 1-frame video.
+
+<div className="captioned-image">
+  <img
+    src="/images/posts/SAM-series/sam2_pvs_task.png"
+    alt="Promptable Visual Segmentation Task"
+    style={{ width: "90%" }}
+  />
+  <div>
+    The PVS task requires segmenting an object across video frames given prompts
+    on any frame.
+  </div>
+</div>
+
+### SAM v2 model architecture
+
+The core challenge in video is **Memory**: "What did the object look like in previous frames?" and "Where was it?".
+SAM v2 introduces a streaming memory mechanism to solve this.
+
+<div className="captioned-image">
+  <img
+    src="/images/posts/SAM-series/sam2_architecture.png"
+    alt="SAM 2 Architecture"
+    style={{ width: "100%" }}
+  />
+  <div>SAM 2 Architecture with Streaming Memory.</div>
+</div>
+
+**Remarks:**
+
+- **Hiera Backbone:** SAM v2 uses **Hiera**, a hierarchical Vision Transformer, instead of the plain ViT in SAM v1. This allows for multiscale features and is significantly faster, enabling real-time video processing.
+- **Streaming Memory:**
+  - **Spatial Memory:** The model stores "fused" feature maps of the image and the predicted mask from past frames. This captures "where" the object was and "what" it looked like.
+  - **Object Pointers:** Lightweight vectors (from the mask decoder output tokens) that capture high-level semantic information (the "identity" of the object) to prevent drifting to similar looking distractors.
+  - **Memory Bank:** A FIFO queue stores the last $N$ frames of spatial memory and up to $M$ "prompted" frames (frames where users explicitly interacted).
+- **Occlusion Handling:** A new head predicts whether the object is visible (occluded) in the current frame. If occluded, the model can "skip" predicting a mask but still maintain memory.
+
+### Data Engine: SA-V Dataset
+
+To train this video foundation model, the authors built the **SA-V** dataset (~51K videos, ~643K masklets).
+They used a similar Model-in-the-Loop scheme as SAM v1, but adapted for video.
+
+<div className="captioned-image">
+  <img
+    src="/images/posts/SAM-series/sam2_data_engine.jpg"
+    alt="SAM 2 Data Engine"
+    style={{ width: "40%" }}
+  />
+  <div>
+    Comparison of manual annotation (left) vs. Model-assisted annotation
+    (right).
+  </div>
+</div>
+
+<div style={{ display: "flex", gap: "20px", alignItems: "flex-start", flexWrap: "wrap" }}>
+  <div style={{ flex: 1, minWidth: "200px" }}>
+    <h4>Phase 1: SAM per frame</h4>
+    <div><b>Method:</b> Brute force</div>
+    <ul>
+      <li>Annotators use SAM v1 to segment object in <b>every single frame</b>.</li>
+      <li>No temporal tracking assistance.</li>
+      <li>Very slow (37.8s / frame) but high quality.</li>
+    </ul>
+  </div>
+  
+  <div style={{ flex: 1, minWidth: "200px" }}>
+    <h4>Phase 2: SAM + SAM 2 Mask</h4>
+    <div><b>Method:</b> Temporal Propagation</div>
+    <ul>
+      <li>Annotators segment one frame with SAM v1.</li>
+      <li><b>SAM 2 Mask</b> (accepts only mask prompts) propagates prediction to other frames.</li>
+      <li>Refine errors by re-segmenting frames from scratch.</li>
+      <li>5.1x faster.</li>
+    </ul>
+  </div>
+
+  <div style={{ flex: 1, minWidth: "200px" }}>
+    <h4>Phase 3: SAM 2</h4>
+    <div><b>Method:</b> Fully Interactive</div>
+    <ul>
+      <li>Annotators use the full <b>SAM 2</b>.</li>
+      <li>Click/Box on any frame to valid/correct the track.</li>
+      <li>Memory mechanism handles consistency.</li>
+      <li><b>8.4x faster</b> than Phase 1.</li>
+    </ul>
+  </div>
+</div>
+
+---
+
+## SAM v3: Segment Anything with Concepts
+
+### Define the task
+
+While SAM v1/v2 excel at "Segment _this_ object" (where _this_ is defined by a click), they struggle with "Segment _all_ cats".
+SAM v3 introduces **Promptable Concept Segmentation (PCS)**.
+
+- **Goal:** Segment all instances matching a specific **concept**.
+- **Input:**
+  - **Text:** "Yellow school bus", "Person wearing red shirt".
+  - **Visual Exemplar:** A box around one instance of the object.
+- **Output:** Masks and unique IDs for _all_ matching objects in the image or video.
+
+<div className="captioned-image">
+  <img
+    src="/images/posts/SAM-series/sam3_pcs_task.png"
+    alt="Promptable Concept Segmentation Task"
+    style={{ width: "100%" }}
+  />
+  <div>
+    Promptable Concept Segmentation: Segmenting all instances of a concept
+    defined by text or visual exemplar.
+  </div>
+</div>
+
+This bridges the gap between **Generic Segmentation** (SAM) and **Open-Vocabulary Detection** (OWL-ViT, GroundingDINO).
+
+### SAM v3 model architecture
+
+The core innovation is **"Shared Eyes, Split Brain"**. A single image backbone supports two distinct tasks: **Detection** (Category-aware, Identity-agnostic) and **Tracking** (Identity-aware, Category-agnostic).
+
+<div className="captioned-image">
+  <img
+    src="/images/posts/SAM-series/sam3_architecture.png"
+    alt="SAM 3 Architecture"
+    style={{ width: "100%" }}
+  />
+  <div>SAM 3 "Shared Eyes, Split Brain" Architecture.</div>
+</div>
+
+**Remarks:**
+
+- **Shared Perception Encoder:** Uses a high-performance vision-language backbone (Bolya 2025) that is effective for both tasks.
+- **The "Presence Head":**
+  - A classic problem in open-vocabulary detection is **Hallucination**. If you ask a model to find "dragons" in an empty room, standard detectors force their queries to find the "most dragon-like" patch, often yielding false positives.
+  - SAM v3 adds a **Global Presence Token** that first predicts: _"Is the concept 'dragon' present in this image at all?"_.
+  - The final score for an object is $P(\text{Object}|\text{Present}) \times P(\text{Present})$. If the Presence Head says "No", all object scores drop to zero.
+- **Unified Logic:** The Detector finds objects, and the Tracker (inherited from SAM 2) propagates them through time.
+
+### Data Engine: SA-Co Dataset
+
+To solve the scale and ambiguity of concepts, Meta built the **SA-Co** (Segment Anything with Concepts) dataset (~4M concepts).
+The data engine focuses heavily on **AI Verification** to scale up.
+
+<div className="captioned-image">
+  <img
+    src="/images/posts/SAM-series/sam3_data_engine.png"
+    alt="SAM 3 Data Engine"
+    style={{ width: "100%" }}
+  />
+  <div>
+    The SA-Co Data Engine pipeline, featuring human and AI verification stages.
+  </div>
+</div>
+
+#### Phase 1: Human Verification
+
+- **Input:** Noisy image-text pairs.
+- **Action:** Human annotators verify mask quality and exhaustivity (did we catch all instances?).
+- **Outcome:** ~4.3M high-quality pairs. Used to train initial models.
+
+#### Phase 2: AI Verification
+
+- **Innovation:** Replaced humans with **Llama 3.2**.
+- Fine-tuned Llama on Phase 1 data to act as a "Verifier".
+- It rates masks as "Correct/Incorrect" and checks exhaustivity.
+- **Result:** Doubles the throughput of the data engine.
+
+#### Phase 3: Scaling & Ontology
+
+- **Expansion:** Mining concepts from image alt-text and a massive Wikidata knowledge graph.
+- Introduction of **Hard Negatives** (e.g., if prompting for "Lion", ensure the model doesn't click "Tiger").
+
+#### Phase 4: Video
+
+- Extends the engine to video by sampling frames, annotating them, and propagating with SAM v2.
+- Prioritizes crowded scenes and motion to capture hard tracking cases.
+
+## References
+
+- **SAM:** [arXiv:2304.02643](https://arxiv.org/abs/2304.02643) - Segment Anything
+- **SAM 2:** [arXiv:2408.00714](https://arxiv.org/abs/2408.00714) - Segment Anything Model 2
+- **SAM 3:** [arXiv:2511.16719](https://arxiv.org/abs/2511.16719) - Segment Anything Model 3
 
 <Comments />
-
-## Reference
